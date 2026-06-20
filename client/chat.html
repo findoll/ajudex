@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AjudeX - Chat</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="auth-utils.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #c8a2c8 0%, #dda0dd 25%, #dda0dd 50%, #48cae4 75%, #00b4d8 100%);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.98);
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        /* Mobile responsive header */
+        @media (max-width: 768px) {
+            .header {
+                padding: 12px 15px;
+            }
+            
+            .contact-photo {
+                width: 40px;
+                height: 40px;
+                font-size: 1rem;
+            }
+            
+            .contact-info h3 {
+                font-size: 1rem;
+            }
+            
+            .contact-status {
+                font-size: 0.75rem;
+            }
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: #c8a2c8;
+            cursor: pointer;
+            margin-right: 15px;
+            font-size: 1.2rem;
+        }
+
+        .chat-header-info {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .contact-photo {
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(135deg, #c8a2c8, #48cae4);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .contact-photo.has-photo {
+            color: transparent;
+        }
+
+        .contact-photo.no-photo {
+            background: linear-gradient(135deg, #c8a2c8, #48cae4);
+        }
+
+        .contact-info h3 {
+            color: #333;
+            margin-bottom: 2px;
+        }
+
+        .contact-status {
+            color: #666;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+
+
+        .chat-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .action-btn:hover {
+            background: rgba(200, 162, 200, 0.1);
+            color: #c8a2c8;
+        }
+
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding-bottom: 140px; /* Espaço para input + navegação */
+        }
+
+        .messages-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            position: relative;
+            word-wrap: break-word;
+        }
+
+        .message.sent {
+            background: linear-gradient(135deg, #ff9a9e, #9bb5ff);
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 6px;
+        }
+
+        .message.received {
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-time {
+            font-size: 0.7rem;
+            opacity: 0.7;
+            margin-top: 4px;
+        }
+
+        .message.sent .message-time {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .message.received .message-time {
+            color: #666;
+        }
+
+        .typing-indicator {
+            display: none;
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 12px 16px;
+            border-radius: 18px;
+            border-bottom-left-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            background: #999;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.4;
+            }
+            30% {
+                transform: translateY(-10px);
+                opacity: 1;
+            }
+        }
+
+        .message-input-area {
+            position: fixed;
+            bottom: 80px; /* Altura da navegação inferior */
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.98);
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            z-index: 999;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+            resize: none;
+            max-height: 100px;
+        }
+
+        .message-input:focus {
+            border-color: #ff9a9e;
+        }
+
+        .send-btn {
+            background: linear-gradient(135deg, #ff9a9e, #9bb5ff);
+            color: white;
+            border: none;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .send-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 5px 15px rgba(255, 154, 158, 0.4);
+        }
+
+        .send-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.98);
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 0 env(safe-area-inset-bottom, 12px);
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            z-index: 1000;
+            height: 80px; /* Altura fixa para navegação */
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.75rem;
+            transition: all 0.3s;
+            padding: 8px 12px;
+            border-radius: 8px;
+            min-width: 60px;
+        }
+
+        .nav-btn.active {
+            color: #ff9a9e;
+            background: rgba(255, 154, 158, 0.1);
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 154, 158, 0.05);
+        }
+
+        .nav-btn i {
+            font-size: 1.3rem;
+        }
+
+        /* Mobile chat adjustments */
+        @media (max-width: 768px) {
+            .messages-area {
+                padding: 15px;
+                padding-bottom: 20px; /* Espaço extra no final */
+            }
+            
+            .message {
+                max-width: 85%;
+                padding: 12px;
+                font-size: 0.9rem;
+            }
+            
+            .message-input-area {
+                padding: 15px;
+                gap: 10px;
+            }
+            
+            .message-input {
+                font-size: 16px; /* Prevents zoom on iOS */
+                padding: 12px 15px;
+            }
+            
+            .send-btn {
+                width: 45px;
+                height: 45px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .nav-btn {
+                font-size: 0.7rem;
+                gap: 3px;
+                padding: 6px 8px;
+                min-width: 50px;
+            }
+            
+            .nav-btn i {
+                font-size: 1.1rem;
+            }
+            
+            .message {
+                max-width: 90%;
+                font-size: 0.85rem;
+            }
+            
+            .message-input-area {
+                bottom: 70px !important; /* Força posição no mobile pequeno */
+                padding: 10px 15px;
+            }
+            
+            .chat-container {
+                padding-bottom: 150px !important; /* Mais espaço no mobile pequeno */
+            }
+        }
+        
+        /* Ajustes específicos para safe area */
+        @supports (env(safe-area-inset-bottom)) {
+            .message-input-area {
+                bottom: calc(80px + env(safe-area-inset-bottom)) !important;
+            }
+        }
+
+        .empty-chat {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .empty-chat i {
+            font-size: 4rem;
+            color: #ddd;
+            margin-bottom: 20px;
+        }
+
+        .empty-chat h3 {
+            margin-bottom: 10px;
+        }
+
+        .match-info-banner {
+            background: linear-gradient(135deg, rgba(81, 207, 102, 0.1), rgba(255, 255, 255, 0.95));
+            padding: 15px 20px;
+            margin: 10px 20px;
+            border-radius: 15px;
+            border: 2px solid #51cf66;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .match-info-banner i {
+            color: #51cf66;
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+
+        .match-info-banner h4 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .match-info-banner p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .report-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 350px;
+            width: 90%;
+            max-height: 80%;
+            overflow-y: auto;
+        }
+
+        .modal-content h3 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .report-options {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .report-option {
+            background: #f5f5f5;
+            border: 2px solid transparent;
+            padding: 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .report-option:hover {
+            background: #e0e0e0;
+        }
+
+        .report-option.selected {
+            background: rgba(255, 154, 158, 0.1);
+            border-color: #ff9a9e;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-right: 10px;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="back-btn" onclick="goBack()">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <div class="chat-header-info">
+            <div class="contact-photo no-photo">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="contact-info">
+                <h3 id="contactName">Carregando...</h3>
+                <div class="contact-status">
+                    <!-- Status removido - não há validação de usuário online -->
+                </div>
+            </div>
+        </div>
+        <div class="chat-actions">
+            <button class="action-btn" onclick="openReportModal()" title="Denunciar/Bloquear">
+                <i class="fas fa-exclamation-triangle"></i>
+            </button>
+        </div>
+    </div>
+
+    <div class="chat-container">
+        <div id="matchInfoBanner" class="match-info-banner" style="display: none;">
+            <i class="fas fa-handshake"></i>
+            <h4>Vocês deram match!</h4>
+            <p>Somos apenas o ponto de encontro. Cada usuário é responsável por suas ações, verifique as referências e combine as condições com atenção.</p>
+        </div>
+
+        <div class="messages-area" id="messagesArea">
+            <div class="empty-chat">
+                <i class="fas fa-comments"></i>
+                <h3>Comece a conversa!</h3>
+                <p>Apresente-se e fale sobre os serviços que oferece.</p>
+            </div>
+        </div>
+
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="typing-dots">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+
+        <div class="message-input-area">
+            <textarea 
+                id="messageInput" 
+                class="message-input" 
+                placeholder="Digite sua mensagem..."
+                rows="1"
+                onkeydown="handleKeyPress(event)"
+                oninput="handleInput()"
+            ></textarea>
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal de Denúncia -->
+    <div id="reportModal" class="report-modal">
+        <div class="modal-content">
+            <h3>Denunciar/Bloquear Usuário</h3>
+            <p style="color: #666; margin-bottom: 20px;">Por que você está reportando este usuário?</p>
+            
+            <div class="report-options">
+                <div class="report-option" onclick="selectReportReason('fake-service')">
+                    <strong>Serviço falso</strong><br>
+                    <small>Não oferece o serviço anunciado</small>
+                </div>
+                <div class="report-option" onclick="selectReportReason('inappropriate')">
+                    <strong>Comportamento inadequado</strong><br>
+                    <small>Linguagem ofensiva ou inadequada</small>
+                </div>
+                <div class="report-option" onclick="selectReportReason('spam')">
+                    <strong>Spam</strong><br>
+                    <small>Enviando mensagens excessivas</small>
+                </div>
+            </div>
+
+            <div style="text-align: right;">
+                <button class="btn btn-secondary" onclick="closeReportModal()">Cancelar</button>
+                <button class="btn btn-danger" onclick="submitReport()" id="reportBtn" disabled>Denunciar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <button class="nav-btn" onclick="goToPage('discovery')">
+            <i class="fas fa-search"></i>
+            Descobrir
+        </button>
+        <button class="nav-btn" onclick="goToPage('matches')">
+            <i class="fas fa-heart"></i>
+            Matches
+        </button>
+        <button class="nav-btn active" onclick="goToPage('chat')">
+            <i class="fas fa-comments"></i>
+            Chat
+        </button>
+        <button class="nav-btn" onclick="goToPage('profile')">
+            <i class="fas fa-user"></i>
+            Perfil
+        </button>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let currentMatch = null;
+        let messages = [];
+        let selectedReportReason = null;
+        
+        // Cache de mensagens por match
+        const messageCache = {
+            // Estrutura: { matchId: { messages: [], timestamp: Date, userId: number } }
+            data: {},
+            
+            // Salvar mensagens no cache
+            save: function(matchId, userId, messageList) {
+                const cacheKey = `${matchId}_${userId}`;
+                this.data[cacheKey] = {
+                    messages: [...messageList], // Copia do array
+                    timestamp: Date.now(),
+                    userId: userId,
+                    matchId: matchId
+                };
+                
+                // Salvar no localStorage também
+                try {
+                    localStorage.setItem(`chat_cache_${cacheKey}`, JSON.stringify(this.data[cacheKey]));
+                    console.log(`💾 Cache salvo: ${messageList.length} mensagens para match ${matchId}`);
+                } catch (error) {
+                    console.warn('⚠️ Erro ao salvar cache no localStorage:', error);
+                }
+            },
+            
+            // Carregar mensagens do cache
+            load: function(matchId, userId) {
+                const cacheKey = `${matchId}_${userId}`;
+                
+                // Tentar carregar da memória primeiro
+                if (this.data[cacheKey]) {
+                    const cached = this.data[cacheKey];
+                    console.log(`📦 Cache encontrado na memória: ${cached.messages.length} mensagens`);
+                    return cached.messages;
+                }
+                
+                // Tentar carregar do localStorage
+                try {
+                    const stored = localStorage.getItem(`chat_cache_${cacheKey}`);
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        this.data[cacheKey] = parsed;
+                        console.log(`📦 Cache carregado do localStorage: ${parsed.messages.length} mensagens`);
+                        return parsed.messages;
+                    }
+                } catch (error) {
+                    console.warn('⚠️ Erro ao carregar cache do localStorage:', error);
+                }
+                
+                console.log('📭 Nenhum cache encontrado');
+                return null;
+            },
+            
+            // Verificar se cache é válido e suficiente
+            isValid: function(matchId, userId) {
+                const cacheKey = `${matchId}_${userId}`;
+                const cached = this.data[cacheKey];
+                
+                if (!cached) return false;
+                
+                const age = Date.now() - cached.timestamp;
+                const maxAge = 5 * 60 * 1000; // 5 minutos para validade
+                const valid = age < maxAge;
+                
+                console.log(`⏰ Cache: ${cached.messages.length} msgs, age: ${Math.round(age/1000)}s, válido: ${valid}`);
+                return valid;
+            },
+            
+            // Verificar se cache tem mensagens suficientes (para evitar buscar histórico desnecessariamente)
+            isSufficient: function(matchId, userId, minMessages = 20) {
+                const cacheKey = `${matchId}_${userId}`;
+                const cached = this.data[cacheKey];
+                
+                if (!cached) return false;
+                
+                const sufficient = cached.messages.length >= minMessages;
+                console.log(`📊 Cache suficiente? ${cached.messages.length} >= ${minMessages}: ${sufficient}`);
+                return sufficient;
+            },
+            
+            // Limpar cache antigo
+            cleanup: function() {
+                const maxAge = 30 * 60 * 1000; // 30 minutos
+                const now = Date.now();
+                
+                Object.keys(this.data).forEach(key => {
+                    if (now - this.data[key].timestamp > maxAge) {
+                        delete this.data[key];
+                        localStorage.removeItem(`chat_cache_${key}`);
+                        console.log(`🗑️ Cache expirado removido: ${key}`);
+                    }
+                });
+            }
+        };
+
+        // Obter parâmetro de match da URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const matchId = urlParams.get('match');
+        
+        console.log('💬 Página chat carregando...', matchId ? `Match: ${matchId}` : 'Sem match específico');
+
+        // Inicialização da página - verificar autenticação
+        window.addEventListener('DOMContentLoaded', async () => {
+            console.log('🔄 Inicializando página Chat...');
+            
+            // Verificar se usuário está logado
+            const token = getSavedToken();
+            const savedUser = getSavedUser();
+            
+            if (!token || !savedUser) {
+                console.log('🔒 Acesso negado - redirecionando para login');
+                window.location.href = '/';
+                return;
+            }
+            
+            currentUser = savedUser;
+            updateUserDisplay(savedUser);
+            console.log('✅ Usuário autenticado na página Chat:', savedUser.name);
+            
+            // Carregar dados da página
+            initializeChat();
+        });
+
+        // Listener para quando usuário volta à tela (recarregar mensagens)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && matchId && currentUser) {
+                console.log('👁️ Página voltou ao foco - recarregando mensagens...');
+                console.log(`📊 Estado atual: ${messages.length} mensagens carregadas`);
+                // Recarregar mensagens SEM limpar cache primeiro (para evitar tela vazia)
+                loadMessages(matchId);
+            }
+        });
+
+        // Listener adicional para foco da janela
+        window.addEventListener('focus', () => {
+            if (matchId && currentUser) {
+                console.log('🔄 Janela em foco - recarregando mensagens...');
+                console.log(`📊 Estado atual: ${messages.length} mensagens carregadas`);
+                // Recarregar mensagens SEM limpar cache primeiro (para evitar tela vazia)
+                loadMessages(matchId);
+            }
+        });
+
+        // Auto-refresh das mensagens a cada 30 segundos
+        let refreshInterval;
+        function startMessageRefresh() {
+            if (refreshInterval) clearInterval(refreshInterval);
+            
+            refreshInterval = setInterval(() => {
+                if (matchId && currentUser && !document.hidden) {
+                    console.log('🔄 Auto-refresh: carregando últimas mensagens...');
+                    console.log(`📊 Mensagens antes do refresh: ${messages.length}`);
+                    // Recarregar mensagens mantendo cache até nova carga (evita tela vazia)
+                    loadMessages(matchId);
+                }
+            }, 30000); // 30 segundos
+        }
+
+        // Parar refresh quando sai da página
+        window.addEventListener('beforeunload', () => {
+            if (refreshInterval) clearInterval(refreshInterval);
+        });
+
+        // Inicializar chat
+        function initializeChat() {
+            console.log('🔄 Inicializando chat...');
+            loadChat();
+        }
+
+        // Carregar chat
+        function loadChat() {
+            if (matchId) {
+                console.log(`🎯 Carregando chat específico: ${matchId}`);
+                // Carregar chat específico
+                loadSpecificChat(matchId);
+            } else {
+                console.log('📋 Redirecionando para lista de matches');
+                // Mostrar lista de chats ou chat mais recente
+                loadChatList();
+            }
+        }
+
+        // Carregar chat específico
+        async function loadSpecificChat(matchId) {
+            try {
+                console.log(`🔄 Buscando dados do match ${matchId}...`);
+                
+                // Buscar dados dos matches do usuário
+                const response = await fetch(`/api/matches/${currentUser.id}`);
+                const data = await response.json();
+                
+                if (data.success && data.matches) {
+                    // Encontrar o match específico
+                    const matchData = data.matches.find(m => m.matchId == matchId);
+                    
+                    if (matchData) {
+                        currentMatch = {
+                            id: matchData.matchId,
+                            name: matchData.user.name,
+                            premium: matchData.user.premium,
+                            photo: matchData.user.photo,
+                            services: getServiceNames(matchData.user.servicesOffered || matchData.user.offeredServices),
+                            userId: matchData.user.id
+                        };
+                        
+                        // Atualizar interface
+                        updateChatHeader(currentMatch);
+                        
+                        console.log('💬 Chat carregado para:', currentMatch.name);
+                        
+                        // Carregar histórico completo SEMPRE
+                        console.log('📩 Forçando carregamento do histórico completo...');
+                        await loadMessages(matchId, false); // false = forçar API, não usar cache
+                        
+                        // Iniciar refresh automático
+                        startMessageRefresh();
+                    } else {
+                        console.error('❌ Match não encontrado - carregando mensagens diretamente');
+                        await loadDefaultChat();
+                    }
+                } else {
+                    console.error('❌ Erro ao buscar matches - carregando mensagens diretamente');
+                    await loadDefaultChat();
+                }
+            } catch (error) {
+                console.error('❌ Erro na requisição - carregando mensagens diretamente:', error);
+                await loadDefaultChat();
+            }
+        }
+        
+        // Atualizar cabeçalho do chat
+        function updateChatHeader(matchData) {
+            const contactNameEl = document.getElementById('contactName');
+            const contactPhotoEl = document.querySelector('.contact-photo');
+            const matchInfoEl = document.getElementById('matchInfoBanner');
+            
+            if (contactNameEl) {
+                contactNameEl.textContent = matchData.name;
+            }
+            
+            if (contactPhotoEl) {
+                const hasPhoto = matchData.photo && matchData.photo.trim() !== '';
+                if (hasPhoto) {
+                    contactPhotoEl.style.backgroundImage = `url('${matchData.photo}')`;
+                    contactPhotoEl.classList.add('has-photo');
+                    contactPhotoEl.classList.remove('no-photo');
+                    contactPhotoEl.innerHTML = '';
+                } else {
+                    contactPhotoEl.style.backgroundImage = '';
+                    contactPhotoEl.classList.add('no-photo');
+                    contactPhotoEl.classList.remove('has-photo');
+                    contactPhotoEl.innerHTML = '<i class="fas fa-user"></i>';
+                }
+            }
+            
+            if (matchInfoEl) {
+                matchInfoEl.style.display = 'block';
+            }
+        }
+        
+        // Chat padrão quando não encontra dados
+        async function loadDefaultChat() {
+            const contactNameEl = document.getElementById('contactName');
+            if (contactNameEl) {
+                contactNameEl.textContent = 'Usuário';
+            }
+            console.log('💬 Chat carregado para: Usuário');
+
+            // Carregar histórico completo SEMPRE
+            console.log('📩 Forçando carregamento do histórico completo...');
+            await loadMessages(matchId, false); // false = não usar cache, buscar direto da API
+            
+            // Iniciar refresh automático
+            startMessageRefresh();
+        }
+
+        // Carregar mensagens SEMPRE da API com histórico completo
+        async function loadMessages(matchId, useCache = true) {
+            try {
+                console.log(`📩 Carregando histórico completo do match ${matchId}...`);
+                
+                // 1. Se tiver cache válido, mostrar imediatamente para UX
+                if (useCache) {
+                    const cachedMessages = messageCache.load(matchId, currentUser.id);
+                    const isValid = messageCache.isValid(matchId, currentUser.id);
+                    
+                    if (cachedMessages && isValid && cachedMessages.length > 0) {
+                        console.log(`⚡ Exibindo cache enquanto carrega histórico: ${cachedMessages.length} mensagens`);
+                        messages = [...cachedMessages];
+                        displayMessages();
+                        scrollToBottom();
+                    }
+                }
+                
+                // 2. SEMPRE buscar histórico completo da API (independente do cache)
+                console.log('📖 Buscando histórico completo do banco de dados...');
+                const token = getSavedToken();
+                if (!token) {
+                    console.error('❌ Token não encontrado');
+                    window.location.href = '/';
+                    return;
+                }
+
+                const response = await fetch(`/api/messages/${matchId}?limit=100`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.status === 401) {
+                    console.error('❌ Token inválido');
+                    localStorage.removeItem('authToken');
+                    window.location.href = '/';
+                    return;
+                }
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    const allMessages = data.messages || [];
+                    console.log(`✅ Histórico completo carregado: ${allMessages.length} mensagens do banco`);
+                    
+                    // SEMPRE atualizar com histórico completo
+                    messages = allMessages;
+                    displayMessages();
+                    scrollToBottom();
+                    
+                    // Salvar histórico completo no cache para próximas visitas
+                    messageCache.save(matchId, currentUser.id, allMessages);
+                    console.log(`💾 Cache atualizado com histórico completo: ${allMessages.length} mensagens`);
+                    
+                    if (allMessages.length > 0) {
+                        console.log(`📅 Período: ${new Date(allMessages[0].timestamp).toLocaleString()} até ${new Date(allMessages[allMessages.length-1].timestamp).toLocaleString()}`);
+                    }
+                } else {
+                    console.log('❌ API erro:', data);
+                    displayMessages(); // Mostrar estado atual mesmo com erro
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar histórico:', error);
+                displayMessages(); // Sempre mostrar UI, mesmo com erro
+            }
+        }
+
+        // Carregar lista de chats
+        function loadChatList() {
+            // Se não há match específico, voltar para matches
+            window.location.href = '/matches.html';
+        }
+        
+        // Função auxiliar para obter nomes dos serviços
+        function getServiceNames(serviceIds) {
+            const serviceNames = {
+                1: 'Limpeza', 2: 'Jardinagem', 3: 'Encanamento', 4: 'Eletricista', 5: 'Pintura',
+                6: 'Marcenaria', 7: 'Pedreiro', 8: 'Vidraceiro', 9: 'Culinária', 10: 'Doces e Bolos',
+                11: 'Marmitas', 12: 'Aulas de Inglês', 13: 'Aulas de Matemática', 14: 'Aulas de Música', 15: 'Reforço Escolar',
+                16: 'Tradução', 17: 'Design Gráfico', 18: 'Desenvolvimento Web', 19: 'Edição de Vídeo', 20: 'Consultoria em TI',
+                21: 'Cabeleireiro', 22: 'Manicure', 23: 'Maquiagem', 24: 'Mudanças', 25: 'Entrega',
+                26: 'Motorista', 27: 'Costura', 28: 'Pet Care', 29: 'Fotografia', 30: 'Personal Trainer',
+                31: 'Consultoria Juridica', 32: 'Cuidador', 33: 'Depilação', 34: 'Sapateiro', 35: 'Tattoo e Piercing',
+                36: 'Massoterapia', 37: 'Reparo Carro&Moto'
+            };
+            
+            if (!serviceIds || serviceIds.length === 0) return ['Serviços diversos'];
+            return serviceIds.slice(0, 2).map(id => serviceNames[id] || `Serviço ${id}`);
+        }
+
+        // Exibir mensagens
+        function displayMessages() {
+            const messagesArea = document.getElementById('messagesArea');
+            
+            if (messages.length === 0) {
+                messagesArea.innerHTML = `
+                    <div class="empty-chat">
+                        <i class="fas fa-comments"></i>
+                        <h3>Comece a conversa!</h3>
+                        <p>Apresente-se e fale sobre os serviços que oferece.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            messagesArea.innerHTML = messages.map(message => {
+                const isSent = message.senderId === currentUser.id;
+                const timeStr = formatTime(message.timestamp);
+                
+                return `
+                    <div class="message ${isSent ? 'sent' : 'received'}">
+                        <div>${message.content}</div>
+                        <div class="message-time">${timeStr}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Formatar tempo da mensagem
+        function formatTime(timestamp) {
+            const now = new Date();
+            const msgTime = new Date(timestamp);
+            const diffMs = now - msgTime;
+            const diffMins = Math.floor(diffMs / (1000 * 60));
+            const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+            const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+            if (diffMins < 1) return 'agora';
+            if (diffMins < 60) return `${diffMins}min`;
+            if (diffHours < 24) return `${diffHours}h`;
+            if (diffDays < 7) return `${diffDays}d`;
+            
+            return msgTime.toLocaleDateString('pt-BR');
+        }
+
+        // Lidar com entrada de texto
+        function handleInput() {
+            const input = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            
+            // Habilitar/desabilitar botão de envio
+            sendBtn.disabled = !input.value.trim();
+            
+            // Auto-resize do textarea
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 100) + 'px';
+            
+            // Simular indicador de digitação
+            if (input.value.trim()) {
+                showTypingIndicator();
+            } else {
+                hideTypingIndicator();
+            }
+        }
+
+        // Lidar com teclas pressionadas
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // Enviar mensagem
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+            
+            if (!content) return;
+
+            try {
+                // 1. Criar mensagem temporária na UI para feedback imediato
+                const tempMessage = {
+                    id: `temp_${Date.now()}`,
+                    senderId: currentUser.id,
+                    content: content,
+                    timestamp: new Date(),
+                    sending: true // Indica que está enviando
+                };
+
+                // Adicionar temporariamente à UI
+                messages.push(tempMessage);
+                displayMessages();
+                scrollToBottom();
+
+                // Limpar input imediatamente
+                input.value = '';
+                input.style.height = 'auto';
+                document.getElementById('sendBtn').disabled = true;
+
+                // 2. Enviar para o servidor
+                const token = getSavedToken();
+                if (!token) {
+                    console.error('❌ Token não encontrado');
+                    // Remover mensagem temporária
+                    messages.pop();
+                    displayMessages();
+                    alert('Erro de autenticação. Faça login novamente.');
+                    window.location.href = '/';
+                    return;
+                }
+
+                console.log(`📤 Enviando mensagem para match ${matchId}...`);
+                const response = await fetch('/api/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        matchId: parseInt(matchId),
+                        senderId: currentUser.id,
+                        content: content
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    console.log('✅ Mensagem enviada com sucesso:', data.message.id);
+                    
+                    // 3. Remover mensagem temporária e adicionar a real do servidor
+                    const tempIndex = messages.findIndex(m => m.id === tempMessage.id);
+                    if (tempIndex !== -1) {
+                        messages.splice(tempIndex, 1);
+                    }
+                    
+                    // Adicionar mensagem real do servidor
+                    const serverMessage = {
+                        id: data.message.id,
+                        senderId: data.message.senderId,
+                        content: data.message.content,
+                        timestamp: data.message.timestamp,
+                        sender: data.message.sender
+                    };
+                    
+                    messages.push(serverMessage);
+                    
+                    // 4. Atualizar cache com todas as mensagens atualizadas
+                    const messagesToCache = messages.slice(-100);
+                    messageCache.save(matchId, currentUser.id, messagesToCache);
+                    console.log(`💾 Cache atualizado com nova mensagem enviada (${messagesToCache.length} mensagens)`);
+                    
+                    // 5. Atualizar display final
+                    displayMessages();
+                    scrollToBottom();
+                    
+                } else {
+                    console.error('❌ Erro ao enviar mensagem:', data.error);
+                    // Remover mensagem temporária em caso de erro
+                    const tempIndex = messages.findIndex(m => m.id === tempMessage.id);
+                    if (tempIndex !== -1) {
+                        messages.splice(tempIndex, 1);
+                    }
+                    displayMessages();
+                    alert('Erro ao enviar mensagem. Tente novamente.');
+                }
+
+            } catch (error) {
+                console.error('❌ Erro na requisição:', error);
+                // Remover mensagem temporária em caso de erro
+                const tempIndex = messages.findIndex(m => m.sending === true);
+                if (tempIndex !== -1) {
+                    messages.splice(tempIndex, 1);
+                }
+                displayMessages();
+                alert('Erro ao enviar mensagem. Verifique sua conexão.');
+            }
+        }
+
+        // Função removida - não gerar mais respostas automáticas
+
+        // Mostrar indicador de digitação
+        function showTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            indicator.style.display = 'flex';
+            scrollToBottom();
+            
+            // Esconder após 3 segundos
+            setTimeout(() => {
+                hideTypingIndicator();
+            }, 3000);
+        }
+
+        // Esconder indicador de digitação
+        function hideTypingIndicator() {
+            document.getElementById('typingIndicator').style.display = 'none';
+        }
+
+        // Rolar para baixo
+        function scrollToBottom() {
+            const messagesArea = document.getElementById('messagesArea');
+            setTimeout(() => {
+                messagesArea.scrollTop = messagesArea.scrollHeight;
+            }, 100);
+        }
+
+        // Abrir modal de denúncia
+        function openReportModal() {
+            document.getElementById('reportModal').style.display = 'flex';
+        }
+
+        // Fechar modal de denúncia
+        function closeReportModal() {
+            document.getElementById('reportModal').style.display = 'none';
+            selectedReportReason = null;
+            
+            // Limpar seleções
+            document.querySelectorAll('.report-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            
+            document.getElementById('reportBtn').disabled = true;
+        }
+
+        // Selecionar motivo da denúncia
+        function selectReportReason(reason) {
+            // Limpar seleções anteriores
+            document.querySelectorAll('.report-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            
+            // Selecionar novo motivo
+            event.target.closest('.report-option').classList.add('selected');
+            selectedReportReason = reason;
+            
+            // Habilitar botão de denúncia
+            document.getElementById('reportBtn').disabled = false;
+        }
+
+        // Enviar denúncia
+        async function submitReport() {
+            if (!selectedReportReason || !currentMatch) return;
+            
+            try {
+                const reasonMap = {
+                    'fake-service': 'Serviço falso',
+                    'inappropriate': 'Comportamento inadequado', 
+                    'spam': 'Spam'
+                };
+
+                const response = await fetch('/api/report', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        reporterId: currentUser.id,
+                        reportedUserId: currentMatch.id,
+                        reason: reasonMap[selectedReportReason]
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('Denúncia enviada com sucesso!');
+                    console.log('✅ Denúncia registrada:', selectedReportReason);
+                } else {
+                    alert(data.message || 'Erro ao enviar denúncia');
+                    console.error('❌ Erro na denúncia:', data);
+                }
+
+            } catch (error) {
+                console.error('❌ Erro ao enviar denúncia:', error);
+                alert('Erro ao enviar denúncia. Tente novamente.');
+            }
+            
+            closeReportModal();
+        }
+
+        // Navegação
+        function goToPage(page) {
+            switch (page) {
+                case 'discovery':
+                    window.location.href = '/discovery';
+                    break;
+                case 'matches':
+                    window.location.href = '/matches';
+                    break;
+                case 'chat':
+                    // Já está no chat
+                    break;
+                case 'profile':
+                    window.location.href = '/profile';
+                    break;
+            }
+        }
+
+        // Voltar para matches
+        function goBack() {
+            window.location.href = '/matches.html';
+        }
+
+        // Inicialização removida - já feita no window.addEventListener acima
+
+        // Voltar
+        function goBack() {
+            window.location.href = '/matches';
+        }
+
+        // Navegação
+        function goToPage(page) {
+            switch (page) {
+                case 'discovery':
+                    window.location.href = '/discovery-new.html';
+                    break;
+                case 'matches':
+                    window.location.href = '/matches.html';
+                    break;
+                case 'chat':
+                    // Já está na página
+                    break;
+                case 'profile':
+                    window.location.href = '/profile.html';
+                    break;
+            }
+        }
+
+        // Inicializar
+        // loadUser() removida - autenticação feita pelo auth-utils.js
+    </script>
+</body>
+</html>

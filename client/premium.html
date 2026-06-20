@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AjudeX - Premium</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #c8a2c8 0%, #dda0dd 25%, #dda0dd 50%, #48cae4 75%, #00b4d8 100%);
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .back-btn {
+            background: none;
+            border: none;
+            color: #c8a2c8;
+            cursor: pointer;
+            margin-right: 15px;
+            font-size: 1.2rem;
+        }
+
+        .logo {
+            background: linear-gradient(135deg, #c8a2c8, #48cae4, #00b4d8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .premium-container {
+            max-width: 400px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        .premium-header {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #333;
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .crown-icon {
+            font-size: 4rem;
+            margin-bottom: 15px;
+        }
+
+        .premium-title {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .premium-subtitle {
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+
+        .benefits-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .benefits-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .benefit-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(255, 154, 158, 0.1);
+            border-radius: 10px;
+        }
+
+        .benefit-icon {
+            color: #ff9a9e;
+            font-size: 1.2rem;
+            margin-right: 15px;
+            width: 20px;
+        }
+
+        .benefit-text {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .plans-section {
+            margin-bottom: 20px;
+        }
+
+        .plan-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .plan-card.recommended {
+            border-color: #ffd700;
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 237, 78, 0.1));
+        }
+
+        .plan-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .plan-card.selected {
+            border-color: #ff9a9e;
+            background: linear-gradient(135deg, rgba(255, 154, 158, 0.1), rgba(155, 181, 255, 0.1));
+        }
+
+        .plan-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .plan-name {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .plan-price {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #ff9a9e;
+        }
+
+        .recommended-badge {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #333;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .plan-description {
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .plan-features {
+            list-style: none;
+        }
+
+        .plan-features li {
+            color: #333;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+
+        .plan-features li i {
+            color: #4facfe;
+            margin-right: 10px;
+            width: 15px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 20px;
+        }
+
+        .btn-premium {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #333;
+        }
+
+        .btn-premium:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(255, 215, 0, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .payment-processing {
+            display: none;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            margin: 0 auto 20px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #ff9a9e;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Payment Form Styles */
+        .payment-form-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .payment-form-content {
+            background: white;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .payment-form-content h2 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 1.5rem;
+        }
+
+        #payment-element {
+            margin: 20px 0;
+        }
+
+        .payment-form-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            justify-content: center;
+        }
+
+        .payment-form-buttons .btn {
+            flex: 1;
+            max-width: 150px;
+        }
+
+        .current-status {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-active {
+            background: linear-gradient(135deg, rgba(81, 207, 102, 0.1), rgba(105, 219, 124, 0.1));
+            border: 2px solid #51cf66;
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex;
+            justify-content: space-around;
+            padding: 15px 0;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.8rem;
+            transition: color 0.3s;
+        }
+
+        .nav-btn i {
+            font-size: 1.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <button class="back-btn" onclick="goBack()">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+        <div class="logo">AjudeX Premium</div>
+    </div>
+
+    <div class="premium-container">
+        <!-- Status Atual -->
+        <div id="currentStatus" class="current-status">
+            <i class="fas fa-crown" style="font-size: 2rem; color: #666; margin-bottom: 10px;"></i>
+            <h3>Status: Gratuito</h3>
+            <p>Faça upgrade para Premium e destaque-se!</p>
+        </div>
+
+        <!-- Cabeçalho Premium -->
+        <div class="premium-header">
+            <div class="crown-icon">
+                <i class="fas fa-crown"></i>
+            </div>
+            <div class="premium-title">AjudeX Premium</div>
+            <div class="premium-subtitle">Destaque-se e encontre mais oportunidades</div>
+        </div>
+
+        <!-- Benefícios -->
+        <div class="benefits-section">
+            <div class="benefits-title">Benefícios Premium</div>
+            
+            <div class="benefit-item">
+                <i class="fas fa-star benefit-icon"></i>
+                <div class="benefit-text">Perfil em destaque nas buscas</div>
+            </div>
+            
+            <div class="benefit-item">
+                <i class="fas fa-expand-arrows-alt benefit-icon"></i>
+                <div class="benefit-text">Raio de alcance de até 100km</div>
+            </div>
+            
+            <div class="benefit-item">
+                <i class="fas fa-bolt benefit-icon"></i>
+                <div class="benefit-text">Aparece primeiro nos resultados</div>
+            </div>
+            
+            <div class="benefit-item">
+                <i class="fas fa-heart benefit-icon"></i>
+                <div class="benefit-text">Mais matches e oportunidades</div>
+            </div>
+            
+            <div class="benefit-item">
+                <i class="fas fa-shield-alt benefit-icon"></i>
+                <div class="benefit-text">Suporte prioritário</div>
+            </div>
+        </div>
+
+        <!-- Plano Único -->
+        <div class="plans-section">
+            <div class="plan-card recommended" id="onetimePlan" onclick="selectPlan('onetime')">
+                <div class="plan-header">
+                    <div>
+                        <span class="plan-name">Premium 30 Dias</span>
+                        <span class="recommended-badge">Plano Único</span>
+                    </div>
+                    <div class="plan-price">R$ 24,90</div>
+                </div>
+                <div class="plan-description">Pagamento único. Válido por exatos 30 dias. Sem renovação automática.</div>
+                <ul class="plan-features">
+                    <li><i class="fas fa-check"></i> Todos os benefícios Premium</li>
+                    <li><i class="fas fa-check"></i> Pagamento único sem surpresas</li>
+                    <li><i class="fas fa-check"></i> Válido por 30 dias completos</li>
+                    <li><i class="fas fa-check"></i> Sem renovação automática</li>
+                    <li><i class="fas fa-check"></i> Controle total do seu investimento</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Botão de Pagamento -->
+        <button id="upgradeBtn" class="btn btn-premium" onclick="startPayment()" disabled>
+            Clique no plano acima para ativar
+        </button>
+
+        <!-- Processamento de Pagamento -->
+        <div id="paymentProcessing" class="payment-processing">
+            <div class="spinner"></div>
+            <h3>Processando pagamento...</h3>
+            <p>Aguarde enquanto processamos sua assinatura Premium.</p>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <button class="nav-btn" onclick="goToPage('discovery')">
+            <i class="fas fa-search"></i>
+            Descobrir
+        </button>
+        <button class="nav-btn" onclick="goToPage('matches')">
+            <i class="fas fa-heart"></i>
+            Matches
+        </button>
+        <button class="nav-btn" onclick="goToPage('chat')">
+            <i class="fas fa-comments"></i>
+            Chat
+        </button>
+        <button class="nav-btn" onclick="goToPage('profile')">
+            <i class="fas fa-user"></i>
+            Perfil
+        </button>
+    </div>
+
+    <!-- Formulário de Pagamento Stripe -->
+    <div id="paymentForm" class="payment-form-overlay">
+        <div class="payment-form-content">
+            <h2>💳 Finalizar Pagamento</h2>
+            
+            <div class="form-group">
+                <label for="cardholderName">Nome no Cartão</label>
+                <input type="text" id="cardholderName" placeholder="Nome exatamente como aparece no cartão" required
+                       style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin: 8px 0 20px 0;">
+            </div>
+            
+            <div id="payment-element"></div>
+            <div class="payment-form-buttons">
+                <button id="submit-payment" class="btn btn-primary" onclick="confirmPayment()">
+                    Confirmar Pagamento
+                </button>
+                <button class="btn btn-secondary" onclick="cancelPayment()">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let selectedPlan = null;
+
+        // Carregar informações do usuário
+        async function loadUser() {
+            try {
+                const response = await fetch('/api/verify-token', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.user;
+                    updateStatusDisplay();
+                } else {
+                    localStorage.removeItem('token');
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar usuário:', error);
+                window.location.href = '/';
+            }
+        }
+
+        // Atualizar display de status
+        function updateStatusDisplay() {
+            const statusDiv = document.getElementById('currentStatus');
+            
+            if (currentUser.premium) {
+                statusDiv.className = 'current-status status-active';
+                statusDiv.innerHTML = `
+                    <i class="fas fa-crown" style="font-size: 2rem; color: #ffd700; margin-bottom: 10px;"></i>
+                    <h3 style="color: #51cf66;">Status: Premium Ativo</h3>
+                    <p>Você tem todos os benefícios Premium!</p>
+                `;
+                
+                // Esconder planos se já é premium
+                document.querySelector('.plans-section').style.display = 'none';
+                document.getElementById('upgradeBtn').style.display = 'none';
+            }
+        }
+
+        // Selecionar plano
+        function selectPlan(planType) {
+            selectedPlan = planType;
+            
+            // Remove seleção anterior
+            document.querySelectorAll('.plan-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+
+            // Adiciona seleção atual
+            const planCard = document.getElementById(planType + 'Plan');
+            if (planCard) {
+                planCard.classList.add('selected');
+            }
+
+            // Atualiza botão
+            const btn = document.getElementById('upgradeBtn');
+            btn.disabled = false;
+            
+            if (planType === 'onetime') {
+                btn.textContent = 'Comprar Premium 30 Dias - R$ 24,90';
+                btn.className = 'btn btn-premium-onetime';
+            }
+            
+            console.log('Plano selecionado:', planType);
+        }
+
+        // Inicializar Stripe
+        let stripe;
+        let elements;
+        let paymentElement;
+
+        async function initializeStripe() {
+            if (typeof Stripe !== 'undefined') {
+                // Buscar chave pública do Stripe das variáveis de ambiente
+                const response = await fetch('/api/stripe-config');
+                const { publicKey } = await response.json();
+                
+                stripe = Stripe(publicKey);
+                console.log('Stripe inicializado com chave do servidor');
+                return true;
+            } else {
+                console.error('Stripe não carregado');
+                return false;
+            }
+        }
+
+        // Iniciar pagamento único
+        async function startOneTimePayment() {
+            if (!stripe) {
+                alert('Sistema de pagamento não disponível. Tente novamente.');
+                return;
+            }
+
+            try {
+                // Mostrar loading
+                document.getElementById('paymentProcessing').style.display = 'block';
+                document.querySelector('.plans-section').style.display = 'none';
+                document.getElementById('upgradeBtn').style.display = 'none';
+
+                // Criar Payment Intent no servidor
+                const token = localStorage.getItem('authToken');
+                console.log('🔑 Token encontrado:', token ? 'Sim' : 'Não');
+                
+                if (!token) {
+                    throw new Error('Token de autenticação não encontrado. Faça login novamente.');
+                }
+                
+                console.log('📡 Fazendo requisição para /api/create-payment-intent...');
+                const response = await fetch('/api/create-payment-intent', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        amount: 24.90,
+                        currency: 'brl'
+                    })
+                });
+
+                console.log('📊 Status da resposta:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('❌ Erro HTTP:', errorText);
+                    throw new Error(`Erro HTTP ${response.status}: ${errorText}`);
+                }
+
+                const paymentData = await response.json();
+                console.log('📋 Dados recebidos:', paymentData);
+                
+                if (!paymentData.success) {
+                    throw new Error(paymentData.message || 'Erro ao criar pagamento');
+                }
+                
+                const { clientSecret } = paymentData;
+
+                // Inicializar Elements
+                elements = stripe.elements({
+                    clientSecret,
+                    appearance: {
+                        theme: 'stripe',
+                        variables: {
+                            colorPrimary: '#ff9a9e'
+                        }
+                    }
+                });
+
+                // Criar Payment Element simples
+                paymentElement = elements.create('payment');
+                paymentElement.mount('#payment-element');
+
+                // Mostrar formulário de pagamento
+                document.getElementById('paymentProcessing').style.display = 'none';
+                document.getElementById('paymentForm').style.display = 'block';
+
+            } catch (error) {
+                console.error('❌ Erro detalhado ao iniciar pagamento:', error);
+                console.error('❌ Stack trace:', error.stack);
+                
+                let errorMessage = 'Erro ao processar pagamento. Tente novamente.';
+                if (error.message) {
+                    errorMessage += '\nDetalhes: ' + error.message;
+                }
+                
+                alert(errorMessage);
+                document.getElementById('paymentProcessing').style.display = 'none';
+                document.querySelector('.plans-section').style.display = 'block';
+                document.getElementById('upgradeBtn').style.display = 'block';
+            }
+        }
+
+        // Função de assinatura mensal removida - apenas pagamento único disponível
+
+        // Confirmar pagamento
+        async function confirmPayment() {
+            console.log('🔄 Confirmando pagamento...');
+            
+            if (!stripe || !elements) {
+                console.error('❌ Stripe ou Elements não disponível');
+                alert('Sistema de pagamento não disponível');
+                return;
+            }
+
+            // Validar nome no cartão
+            const cardholderName = document.getElementById('cardholderName').value.trim();
+            if (!cardholderName) {
+                alert('Por favor, preencha o nome no cartão');
+                return;
+            }
+
+            console.log('✅ Nome no cartão válido:', cardholderName);
+
+            const submitButton = document.getElementById('submit-payment');
+            submitButton.disabled = true;
+            submitButton.textContent = 'Processando...';
+
+            try {
+                console.log('🔄 Chamando stripe.confirmPayment...');
+                
+                const result = await stripe.confirmPayment({
+                    elements,
+                    confirmParams: {
+                        return_url: window.location.origin + '/premium.html?payment=success',
+                        payment_method_data: {
+                            billing_details: {
+                                name: cardholderName,
+                                email: currentUser.email
+                            }
+                        }
+                    }
+                });
+
+                console.log('📊 Resultado do pagamento:', result);
+
+                if (result.error) {
+                    console.error('❌ Erro no pagamento:', result.error);
+                    alert('Erro no pagamento: ' + result.error.message);
+                    submitButton.disabled = false;
+                    submitButton.textContent = 'Confirmar Pagamento';
+                } else {
+                    console.log('✅ Pagamento confirmado com sucesso!');
+                    // O Stripe redirecionará automaticamente para return_url
+                }
+            } catch (error) {
+                console.error('❌ Exceção durante confirmPayment:', error);
+                alert('Erro inesperado durante o pagamento: ' + error.message);
+                submitButton.disabled = false;
+                submitButton.textContent = 'Confirmar Pagamento';
+            }
+        }
+
+        // Iniciar pagamento único
+        async function startPayment() {
+            if (!selectedPlan || selectedPlan !== 'onetime') {
+                alert('Selecione o plano Premium 30 Dias');
+                return;
+            }
+
+            await startOneTimePayment();
+        }
+
+        // Cancelar pagamento
+        function cancelPayment() {
+            document.getElementById('paymentForm').style.display = 'none';
+            document.querySelector('.plans-section').style.display = 'block';
+            document.getElementById('upgradeBtn').style.display = 'block';
+            
+            if (paymentElement) {
+                paymentElement.unmount();
+            }
+        }
+
+
+
+        // Voltar
+        function goBack() {
+            window.history.back();
+        }
+
+        // Navegação
+        function goToPage(page) {
+            switch (page) {
+                case 'discovery':
+                    window.location.href = '/discovery.html';
+                    break;
+                case 'matches':
+                    window.location.href = '/matches.html';
+                    break;
+                case 'chat':
+                    window.location.href = '/chat.html';
+                    break;
+                case 'profile':
+                    window.location.href = '/profile.html';
+                    break;
+            }
+        }
+
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🔄 Inicializando página Premium...');
+            
+            // Verificar se usuário está logado
+            const token = localStorage.getItem('authToken');
+            const savedUser = JSON.parse(localStorage.getItem('user') || 'null');
+            
+            if (!token || !savedUser) {
+                console.log('🔒 Acesso negado - redirecionando para login');
+                window.location.href = '/';
+                return;
+            }
+            
+            currentUser = savedUser;
+            console.log('✅ Usuário autenticado na página Premium:', savedUser.name);
+            
+            // Inicializar Stripe
+            await initializeStripe();
+            
+            // Atualizar interface
+            updateStatusDisplay();
+        });
+    </script>
+</body>
+</html>

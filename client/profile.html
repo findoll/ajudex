@@ -1,0 +1,1267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AjudeX - Perfil</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="auth-utils.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #c8a2c8 0%, #dda0dd 25%, #dda0dd 50%, #48cae4 75%, #00b4d8 100%);
+            min-height: 100vh;
+            padding-bottom: 80px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo {
+            background: linear-gradient(135deg, #c8a2c8, #48cae4, #00b4d8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 1.4rem;
+            font-weight: bold;
+        }
+
+        .profile-container {
+            max-width: 400px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        .profile-header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 20px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .profile-photo {
+            width: 100px;
+            height: 100px;
+            background: linear-gradient(135deg, #c8a2c8, #dda0dd, #48cae4);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 3rem;
+            color: white;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .photo-upload {
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            background: #00b4d8;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            cursor: pointer;
+        }
+
+        .user-name {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .user-info {
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .premium-status {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #333;
+            padding: 8px 15px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            display: inline-block;
+        }
+
+        .profile-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .services-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .service-item {
+            background: linear-gradient(135deg, #c8a2c8, #48cae4);
+            color: white;
+            padding: 10px;
+            border-radius: 10px;
+            text-align: center;
+            font-size: 0.8rem;
+            position: relative;
+        }
+
+        .service-item .icon {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: block;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #c8a2c8, #48cae4);
+            color: white;
+        }
+
+        .btn-premium {
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #333;
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid #c8a2c8;
+            color: #c8a2c8;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #c8a2c8;
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.98);
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 0 env(safe-area-inset-bottom, 12px);
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            z-index: 1000;
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            color: #666;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.75rem;
+            transition: all 0.3s;
+            padding: 8px 12px;
+            border-radius: 8px;
+            min-width: 60px;
+        }
+
+        .nav-btn.active {
+            color: #ff9a9e;
+            background: rgba(255, 154, 158, 0.1);
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 154, 158, 0.05);
+        }
+
+        .nav-btn i {
+            font-size: 1.3rem;
+        }
+
+        /* Mobile profile adjustments */
+        @media (max-width: 768px) {
+            .header {
+                padding: 12px 15px;
+            }
+            
+            .logo {
+                font-size: 1.2rem;
+            }
+            
+            .profile-container {
+                margin: 15px auto;
+                padding: 0 15px;
+            }
+            
+            .profile-header {
+                padding: 25px 20px;
+            }
+            
+            .profile-photo {
+                width: 80px;
+                height: 80px;
+                font-size: 2.5rem;
+            }
+            
+            .user-name {
+                font-size: 1.3rem;
+            }
+            
+            .profile-section {
+                padding: 20px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .nav-btn {
+                font-size: 0.7rem;
+                gap: 3px;
+                padding: 6px 8px;
+                min-width: 50px;
+            }
+            
+            .nav-btn i {
+                font-size: 1.1rem;
+            }
+            
+            .profile-header {
+                padding: 20px 15px;
+            }
+            
+            .service-selector {
+                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+                gap: 8px;
+            }
+            
+            .service-option {
+                padding: 12px 8px;
+            }
+            
+            .service-option .icon {
+                font-size: 1.2rem;
+            }
+            
+            .service-option .name {
+                font-size: 0.75rem;
+            }
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 400px;
+            width: 90%;
+            max-height: 80%;
+            overflow-y: auto;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .close {
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .close:hover {
+            color: #333;
+        }
+
+        .service-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .service-option {
+            background: #f5f5f5;
+            border: 2px solid transparent;
+            padding: 15px 10px;
+            border-radius: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .service-option:hover {
+            background: #e0e0e0;
+        }
+
+        .service-option.selected {
+            background: linear-gradient(135deg, #ff9a9e, #9bb5ff);
+            color: white;
+            border-color: #ff9a9e;
+        }
+
+        .service-option .icon {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+
+        .service-option .name {
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">AjudeX</div>
+        <button onclick="logout()" style="background: none; border: none; color: #ff9a9e; cursor: pointer;">
+            <i class="fas fa-sign-out-alt"></i> Sair
+        </button>
+    </div>
+
+    <div class="profile-container">
+        <!-- Cabeçalho do Perfil -->
+        <div class="profile-header">
+            <div class="profile-photo" id="profilePhoto">
+                <i class="fas fa-user" id="defaultIcon"></i>
+                <img id="userPhotoImg" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: none;" />
+                <button class="photo-upload" onclick="uploadPhoto()">
+                    <i class="fas fa-camera"></i>
+                </button>
+            </div>
+            <input type="file" id="photoInput" accept="image/*" style="display: none;" />
+            <div class="user-name" id="userName">Carregando...</div>
+            <div class="user-info" id="userInfo">Carregando...</div>
+            <div id="premiumStatus" class="premium-status" style="display: none;">
+                <i class="fas fa-crown"></i> Premium Ativo
+            </div>
+        </div>
+
+        <!-- Serviços Oferecidos -->
+        <div class="profile-section">
+            <div class="section-title">
+                <i class="fas fa-tools"></i>
+                Serviços que Ofereço (máx. 4)
+            </div>
+            <div id="servicesOffered" class="services-grid">
+                <div style="text-align: center; color: #666; grid-column: 1/-1;">
+                    Nenhum serviço configurado
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="openServicesModal('offered')">
+                Configurar Serviços Oferecidos
+            </button>
+        </div>
+
+        <!-- Serviços Desejados -->
+        <div class="profile-section">
+            <div class="section-title">
+                <i class="fas fa-search"></i>
+                Serviços que Busco
+            </div>
+            <div id="servicesWanted" class="services-grid">
+                <div style="text-align: center; color: #666; grid-column: 1/-1;">
+                    Nenhum serviço configurado
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="openServicesModal('wanted')">
+                Configurar Serviços Desejados
+            </button>
+        </div>
+
+        <!-- Ações -->
+        <div class="profile-section">
+            <div class="section-title">
+                <i class="fas fa-cog"></i>
+                Ações
+            </div>
+            <button class="btn btn-premium" onclick="goToPage('premium')">
+                <i class="fas fa-crown"></i> Upgrade Premium
+            </button>
+            <button class="btn btn-secondary" onclick="openSuggestionModal()">
+                <i class="fas fa-lightbulb"></i> Enviar Sugestão
+            </button>
+            <button class="btn btn-secondary" onclick="editProfile()">
+                <i class="fas fa-edit"></i> Editar Perfil
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal de Serviços -->
+    <div id="servicesModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeServicesModal()">&times;</span>
+            <h2 id="modalTitle">Selecionar Serviços</h2>
+            <p id="modalDescription">Escolha os serviços:</p>
+            <div id="serviceSelector" class="service-selector"></div>
+            <button class="btn btn-primary" onclick="saveServices()">Salvar</button>
+        </div>
+    </div>
+
+    <!-- Modal de Sugestão -->
+    <div id="suggestionModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeSuggestionModal()">&times;</span>
+            <h2>Enviar Sugestão</h2>
+            <p>Sua opinião é importante para melhorarmos o AjudeX!</p>
+            <div class="form-group">
+                <label>Sua sugestão (máximo 300 caracteres):</label>
+                <textarea id="suggestionText" rows="5" maxlength="300" placeholder="Digite sua sugestão aqui..."></textarea>
+                <small style="color: #666;">
+                    <span id="charCount">0</span>/300 caracteres
+                </small>
+            </div>
+            <button class="btn btn-primary" onclick="sendSuggestion()">Enviar Sugestão</button>
+        </div>
+    </div>
+
+    <!-- Modal de Edição do Perfil -->
+    <div id="editProfileModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeEditProfileModal()">&times;</span>
+            <h2>Editar Perfil</h2>
+            <p>Atualize suas informações pessoais</p>
+            
+            <div class="form-group">
+                <label for="editName">Nome completo</label>
+                <input type="text" id="editName" required>
+            </div>
+            
+            <div class="form-group">
+                <label>Email (não pode ser alterado)</label>
+                <div id="editEmailDisplay" style="padding: 10px; background: #f5f5f5; border-radius: 5px; color: #666; border: 1px solid #ddd;"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="editBirthDate">Data de nascimento</label>
+                <input type="date" id="editBirthDate" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="editCep">CEP</label>
+                <input type="text" id="editCep" placeholder="00000-000" required maxlength="9" 
+                       oninput="formatCep(this)" onblur="validateCepEdit()">
+                <div id="cepEditInfo" class="cep-info"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="editSearchRadius">Raio de busca (km)</label>
+                <select id="editSearchRadius" required>
+                    <option value="5">5 km</option>
+                    <option value="10">10 km</option>
+                    <option value="15">15 km</option>
+                    <option value="20">20 km</option>
+                    <option value="25">25 km</option>
+                    <option value="30">30 km</option>
+                </select>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button class="btn btn-primary" onclick="saveProfileChanges()">Salvar Alterações</button>
+                <button class="btn btn-secondary" onclick="closeEditProfileModal()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <button class="nav-btn" onclick="goToPage('discovery')">
+            <i class="fas fa-search"></i>
+            Descobrir
+        </button>
+        <button class="nav-btn" onclick="goToPage('matches')">
+            <i class="fas fa-heart"></i>
+            Matches
+        </button>
+        <button class="nav-btn" onclick="goToPage('chat')">
+            <i class="fas fa-comments"></i>
+            Chat
+        </button>
+        <button class="nav-btn active" onclick="goToPage('profile')">
+            <i class="fas fa-user"></i>
+            Perfil
+        </button>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let availableServices = [];
+        let currentModalType = '';
+        let selectedServices = [];
+
+        // REMOVIDO - duplicação que causava conflitos
+
+        // Carregar serviços disponíveis
+        async function loadServices() {
+            try {
+                const response = await fetch('/api/services');
+                availableServices = await response.json();
+            } catch (error) {
+                console.error('Erro ao carregar serviços:', error);
+            }
+        }
+
+        // Carregar informações do usuário no perfil
+        async function loadUserProfile() {
+            try {
+                const response = await fetch('/api/verify-token', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.user;
+                    displayUserInfo();
+                } else {
+                    localStorage.removeItem('token');
+                    window.location.href = '/';
+                }
+            } catch (error) {
+                console.error('Erro ao carregar usuário:', error);
+                window.location.href = '/';
+            }
+        }
+
+        // Exibir informações do usuário
+        function displayUserInfo() {
+            document.getElementById('userName').textContent = currentUser.name;
+            document.getElementById('userInfo').textContent = currentUser.email;
+            
+            if (currentUser.premium) {
+                document.getElementById('premiumStatus').style.display = 'inline-block';
+            }
+
+            displayServices('offered', currentUser.servicesOffered || []);
+            displayServices('wanted', currentUser.servicesWanted || []);
+        }
+
+        // Exibir serviços
+        function displayServices(type, serviceIds) {
+            const container = document.getElementById(type === 'offered' ? 'servicesOffered' : 'servicesWanted');
+            
+            if (serviceIds.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; color: #666; grid-column: 1/-1;">
+                        Nenhum serviço configurado
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = serviceIds.map(id => {
+                const service = availableServices.find(s => s.id === id);
+                return service ? `
+                    <div class="service-item">
+                        <div class="icon">${service.icon}</div>
+                        <div>${service.name}</div>
+                    </div>
+                ` : '';
+            }).join('');
+        }
+
+        // Abrir modal de serviços
+        function openServicesModal(type) {
+            currentModalType = type;
+            const modal = document.getElementById('servicesModal');
+            const title = document.getElementById('modalTitle');
+            const description = document.getElementById('modalDescription');
+            
+            if (type === 'offered') {
+                title.textContent = 'Serviços que Ofereço';
+                description.textContent = 'Escolha até 4 serviços que você oferece:';
+                selectedServices = [...(currentUser.servicesOffered || [])];
+            } else {
+                title.textContent = 'Serviços que Busco';
+                description.textContent = 'Escolha os serviços que você procura:';
+                selectedServices = [...(currentUser.servicesWanted || [])];
+            }
+            
+            renderServiceSelector();
+            modal.style.display = 'block';
+        }
+
+        // Renderizar seletor de serviços
+        function renderServiceSelector() {
+            const selector = document.getElementById('serviceSelector');
+            
+            selector.innerHTML = availableServices.map(service => `
+                <div class="service-option ${selectedServices.includes(service.id) ? 'selected' : ''}" 
+                     onclick="toggleService(${service.id})">
+                    <div class="icon">${service.icon}</div>
+                    <div class="name">${service.name}</div>
+                </div>
+            `).join('');
+        }
+
+        // Alternar seleção de serviço
+        function toggleService(serviceId) {
+            const index = selectedServices.indexOf(serviceId);
+            
+            if (index > -1) {
+                selectedServices.splice(index, 1);
+            } else {
+                if (currentModalType === 'offered' && selectedServices.length >= 4) {
+                    alert('Você pode selecionar no máximo 4 serviços oferecidos');
+                    return;
+                }
+                selectedServices.push(serviceId);
+            }
+            
+            renderServiceSelector();
+        }
+
+        // Salvar serviços
+        async function saveServices() {
+            try {
+                const payload = {};
+                
+                if (currentModalType === 'offered') {
+                    payload.servicesOffered = selectedServices;
+                } else {
+                    payload.servicesWanted = selectedServices;
+                }
+
+                console.log('💾 Salvando serviços:', payload);
+
+                const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+                if (!token) {
+                    alert('Erro de autenticação. Faça login novamente.');
+                    window.location.href = '/';
+                    return;
+                }
+
+                // Verificar se o token parece ser JWT válido
+                if (!token.includes('.') || token.startsWith('dev-token-')) {
+                    alert('Token inválido. Faça login novamente para atualizar.');
+                    logout();
+                    return;
+                }
+
+                const response = await fetch('/api/user/services', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                console.log('📡 Resposta do servidor:', response.status);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Serviços atualizados:', data);
+                    
+                    if (currentModalType === 'offered') {
+                        currentUser.servicesOffered = data.user.servicesOffered;
+                    } else {
+                        currentUser.servicesWanted = data.user.servicesWanted;
+                    }
+                    
+                    // Atualizar localStorage
+                    localStorage.setItem('user', JSON.stringify(currentUser));
+                    
+                    displayUserInfo();
+                    closeServicesModal();
+                    alert('Serviços atualizados com sucesso!');
+                } else {
+                    const errorText = await response.text();
+                    console.error('❌ Erro na resposta:', response.status, errorText);
+                    
+                    try {
+                        const error = JSON.parse(errorText);
+                        alert(error.message || 'Erro ao salvar serviços');
+                    } catch {
+                        alert('Erro ao salvar serviços. Tente novamente.');
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Erro ao salvar serviços:', error);
+                alert('Erro de conexão. Verifique sua internet e tente novamente.');
+            }
+        }
+
+        // Fechar modal de serviços
+        function closeServicesModal() {
+            document.getElementById('servicesModal').style.display = 'none';
+        }
+
+        // Abrir modal de sugestão
+        function openSuggestionModal() {
+            document.getElementById('suggestionModal').style.display = 'block';
+            
+            // Contador de caracteres
+            const textarea = document.getElementById('suggestionText');
+            const counter = document.getElementById('charCount');
+            
+            textarea.addEventListener('input', function() {
+                counter.textContent = this.value.length;
+            });
+        }
+
+        // Fechar modal de sugestão
+        function closeSuggestionModal() {
+            document.getElementById('suggestionModal').style.display = 'none';
+            document.getElementById('suggestionText').value = '';
+            document.getElementById('charCount').textContent = '0';
+        }
+
+        // Enviar sugestão
+        async function sendSuggestion() {
+            const text = document.getElementById('suggestionText').value.trim();
+            
+            if (!text) {
+                alert('Digite sua sugestão');
+                return;
+            }
+
+            if (text.length > 300) {
+                alert('Sugestão deve ter no máximo 300 caracteres');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/suggestions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        userId: currentUser.id,
+                        suggestion: text
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('Sugestão enviada com sucesso! Obrigado pelo feedback.');
+                    console.log('✅ Sugestão enviada:', data.suggestionId);
+                    closeSuggestionModal();
+                } else {
+                    alert(data.message || 'Erro ao enviar sugestão');
+                    console.error('❌ Erro na sugestão:', data);
+                }
+
+            } catch (error) {
+                console.error('❌ Erro ao enviar sugestão:', error);
+                alert('Erro ao enviar sugestão. Tente novamente.');
+            }
+        }
+
+        // Upload de foto
+        function uploadPhoto() {
+            document.getElementById('photoInput').click();
+        }
+
+        // Handle photo upload
+        document.getElementById('photoInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Validate file type
+            if (!file.type.startsWith('image/')) {
+                alert('Por favor, selecione apenas imagens');
+                return;
+            }
+
+            // Validate file size (5MB max)
+            if (file.size > 5 * 1024 * 1024) {
+                alert('A imagem deve ter no máximo 5MB');
+                return;
+            }
+
+            // Show preview immediately
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = document.getElementById('userPhotoImg');
+                const defaultIcon = document.getElementById('defaultIcon');
+                
+                img.src = e.target.result;
+                img.style.display = 'block';
+                defaultIcon.style.display = 'none';
+            };
+            reader.readAsDataURL(file);
+
+            // Upload to server
+            uploadPhotoToServer(file);
+        });
+
+        // Upload photo to server
+        async function uploadPhotoToServer(file) {
+            console.log('📸 Iniciando upload da foto:', file.name, file.size);
+            
+            const formData = new FormData();
+            formData.append('photo', file);
+            
+            try {
+                const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+                console.log('🔑 Token encontrado:', token ? 'Sim' : 'Não');
+                console.log('👤 Usuário atual:', currentUser ? currentUser.name : 'Indefinido');
+                
+                const response = await fetch('/api/upload-photo', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                console.log('📡 Status da resposta:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Resposta do servidor:', data);
+                    
+                    // Update user data
+                    if (data.photoUrl) {
+                        currentUser.photo = data.photoUrl;
+                        localStorage.setItem('user', JSON.stringify(currentUser));
+                        console.log('💾 Dados do usuário atualizados no localStorage');
+                    }
+                    
+                    alert('Foto do perfil atualizada com sucesso!');
+                } else {
+                    console.error('❌ Erro no upload - Status:', response.status);
+                    
+                    try {
+                        const errorData = await response.json();
+                        console.error('❌ Detalhes do erro:', errorData);
+                        alert(`Erro ao enviar foto: ${errorData.message || 'Erro desconhecido'}`);
+                    } catch (e) {
+                        console.error('❌ Erro ao parsear resposta de erro');
+                        alert('Erro ao enviar foto. Tente novamente.');
+                    }
+                    
+                    // Revert preview on error
+                    const img = document.getElementById('userPhotoImg');
+                    const defaultIcon = document.getElementById('defaultIcon');
+                    
+                    img.style.display = 'none';
+                    defaultIcon.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('❌ Erro na requisição:', error);
+                alert('Erro ao enviar foto. Verifique sua conexão.');
+                
+                // Revert preview on error
+                const img = document.getElementById('userPhotoImg');
+                const defaultIcon = document.getElementById('defaultIcon');
+                
+                img.style.display = 'none';
+                defaultIcon.style.display = 'block';
+            }
+        }
+
+        // Display user photo
+        function displayUserPhoto() {
+            const img = document.getElementById('userPhotoImg');
+            const defaultIcon = document.getElementById('defaultIcon');
+            
+            if (currentUser && currentUser.photo) {
+                console.log('🖼️ Carregando foto do usuário:', currentUser.photo);
+                
+                // Verificar se a foto já tem a estrutura correta
+                let photoUrl;
+                if (currentUser.photo.startsWith('/api/photo/')) {
+                    photoUrl = currentUser.photo;
+                } else if (currentUser.photo.startsWith('uploads/')) {
+                    photoUrl = `/api/photo/${currentUser.photo}`;
+                } else {
+                    // Construir URL baseada no ID do usuário
+                    photoUrl = `/api/photo/uploads/profile-${currentUser.id}.jpeg`;
+                    
+                    // Se não funcionar, tentar com .jpg
+                    img.onerror = () => {
+                        photoUrl = `/api/photo/uploads/profile-${currentUser.id}.jpg`;
+                        img.src = photoUrl;
+                        
+                        img.onerror = () => {
+                            // Se ainda falhou, tentar com .png
+                            photoUrl = `/api/photo/uploads/profile-${currentUser.id}.png`;
+                            img.src = photoUrl;
+                            
+                            img.onerror = () => {
+                                console.log('⚠️ Foto não encontrada, mostrando ícone padrão');
+                                img.style.display = 'none';
+                                defaultIcon.style.display = 'block';
+                            };
+                        };
+                    };
+                }
+                
+                img.src = photoUrl;
+                img.onload = () => {
+                    console.log('✅ Foto carregada com sucesso:', photoUrl);
+                    img.style.display = 'block';
+                    defaultIcon.style.display = 'none';
+                };
+            } else {
+                console.log('📷 Nenhuma foto definida, mostrando ícone padrão');
+                img.style.display = 'none';
+                defaultIcon.style.display = 'block';
+            }
+        }
+
+        // Editar perfil
+        function editProfile() {
+            document.getElementById('editProfileModal').style.display = 'block';
+            
+            // Preencher campos com dados atuais
+            if (currentUser) {
+                document.getElementById('editName').value = currentUser.name || '';
+                document.getElementById('editBirthDate').value = currentUser.birthDate || '';
+                document.getElementById('editCep').value = currentUser.cep || '';
+                document.getElementById('editSearchRadius').value = currentUser.searchRadius || 10;
+                
+                // Mostrar email como readonly
+                document.getElementById('editEmailDisplay').textContent = currentUser.email || '';
+            }
+        }
+
+        // Fechar modal de edição
+        function closeEditProfileModal() {
+            document.getElementById('editProfileModal').style.display = 'none';
+        }
+
+        // Salvar alterações do perfil
+        async function saveProfileChanges() {
+            const name = document.getElementById('editName').value.trim();
+            const birthDate = document.getElementById('editBirthDate').value;
+            const cep = document.getElementById('editCep').value.trim();
+            const searchRadius = parseInt(document.getElementById('editSearchRadius').value);
+
+            if (!name || !birthDate || !cep || !searchRadius) {
+                alert('Preencha todos os campos obrigatórios');
+                return;
+            }
+
+            // Validar CEP
+            const cepClean = cep.replace(/\D/g, '');
+            if (cepClean.length !== 8) {
+                alert('CEP deve ter 8 dígitos');
+                return;
+            }
+
+            // Validar raio de busca
+            if (searchRadius < 5 || searchRadius > 30) {
+                alert('Raio de busca deve estar entre 5 e 30 km');
+                return;
+            }
+
+            try {
+                // Validar CEP via API do ViaCEP
+                const cepResponse = await fetch(`https://viacep.com.br/ws/${cepClean}/json/`);
+                const cepData = await cepResponse.json();
+                
+                if (cepData.erro) {
+                    alert('CEP inválido');
+                    return;
+                }
+
+                const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+                const response = await fetch('/api/update-profile', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        name,
+                        birthDate,
+                        cep: cepClean,
+                        searchRadius,
+                        city: cepData.localidade,
+                        state: cepData.uf
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Atualizar dados do usuário
+                    currentUser.name = name;
+                    currentUser.birthDate = birthDate;
+                    currentUser.cep = cepClean;
+                    currentUser.searchRadius = searchRadius;
+                    currentUser.city = cepData.localidade;
+                    currentUser.state = cepData.uf;
+                    
+                    // Salvar no localStorage
+                    localStorage.setItem('user', JSON.stringify(currentUser));
+                    
+                    // Atualizar interface
+                    displayUserInfo();
+                    
+                    alert('Perfil atualizado com sucesso!');
+                    closeEditProfileModal();
+                } else {
+                    const errorData = await response.json();
+                    alert(errorData.message || 'Erro ao atualizar perfil');
+                }
+            } catch (error) {
+                console.error('Erro ao atualizar perfil:', error);
+                alert('Erro ao atualizar perfil. Tente novamente.');
+            }
+        }
+
+        // Formatar CEP no modal de edição
+        function formatCep(input) {
+            let value = input.value.replace(/\D/g, '');
+            if (value.length > 5) {
+                value = value.substring(0, 5) + '-' + value.substring(5, 8);
+            }
+            input.value = value;
+        }
+
+        // Validar CEP no modal de edição
+        async function validateCepEdit() {
+            const cep = document.getElementById('editCep').value.replace(/\D/g, '');
+            const cepInfo = document.getElementById('cepEditInfo');
+            
+            if (cep.length !== 8) {
+                cepInfo.innerHTML = '';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                const data = await response.json();
+                
+                if (data.erro) {
+                    cepInfo.innerHTML = '<span style="color: #e74c3c;">❌ CEP inválido</span>';
+                } else {
+                    cepInfo.innerHTML = `<span style="color: #27ae60;">✅ ${data.localidade} - ${data.uf}</span>`;
+                }
+            } catch (error) {
+                cepInfo.innerHTML = '<span style="color: #e74c3c;">❌ Erro ao validar CEP</span>';
+            }
+        }
+
+        // Logout
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('user');
+            console.log('🚪 Logout realizado do perfil');
+            window.location.href = '/';
+        }
+
+        // Inicializar serviços padrão
+        function initializeDefaultServices() {
+            availableServices = [
+                { id: 1, name: 'Limpeza Residencial', icon: '🧹', category: 'Casa' },
+                { id: 2, name: 'Culinária', icon: '👨‍🍳', category: 'Alimentação' },
+                { id: 3, name: 'Jardinagem', icon: '🌱', category: 'Casa' },
+                { id: 4, name: 'Encanamento', icon: '🔧', category: 'Casa' },
+                { id: 5, name: 'Elétrica', icon: '⚡', category: 'Casa' },
+                { id: 6, name: 'Idiomas', icon: '🗣️', category: 'Educação' },
+                { id: 7, name: 'Reforço Escolar', icon: '📚', category: 'Educação' },
+                { id: 8, name: 'Design Gráfico', icon: '🎨', category: 'Digital' }
+            ];
+        }
+
+        // Carregar serviços do servidor
+        async function loadServicesFromServer() {
+            try {
+                const response = await fetch('/api/services');
+                if (response.ok) {
+                    const services = await response.json();
+                    availableServices = services;
+                    console.log('✅ Serviços atualizados do servidor:', services.length);
+                }
+            } catch (error) {
+                console.log('⚠️ Usando serviços padrão');
+            }
+        }
+
+        // Navegação
+        function goToPage(page) {
+            console.log('🔄 Navegando para:', page);
+            
+            switch (page) {
+                case 'discovery':
+                    window.location.href = '/discovery-new.html';
+                    break;
+                case 'matches':
+                    window.location.href = '/matches.html';
+                    break;
+                case 'chat':
+                    window.location.href = '/chat.html';
+                    break;
+                case 'premium':
+                    window.location.href = '/premium.html';
+                    break;
+                case 'profile':
+                    // Já está na página
+                    console.log('✅ Já na página de perfil');
+                    break;
+            }
+        }
+
+        // Carregar dados reais do usuário do servidor
+        async function loadUserProfile() {
+            try {
+                const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+                if (!token) {
+                    console.log('🔒 Token não encontrado - redirecionando');
+                    window.location.href = '/';
+                    return;
+                }
+
+                const response = await fetch('/api/profile', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.user;
+                    
+                    // Atualizar localStorage com dados reais do servidor
+                    localStorage.setItem('user', JSON.stringify(currentUser));
+                    
+                    console.log('✅ Dados do perfil carregados do servidor:', currentUser.name);
+                    console.log('📊 Dados completos:', {
+                        birthDate: currentUser.birthDate,
+                        cep: currentUser.cep,
+                        searchRadius: currentUser.searchRadius
+                    });
+                    
+                    // Atualizar interface com dados reais
+                    displayUserInfo();
+                    displayUserPhoto();
+                } else {
+                    console.error('❌ Erro ao carregar perfil do servidor');
+                    if (response.status === 401 || response.status === 403) {
+                        alert('Sessão expirada. Faça login novamente.');
+                        window.location.href = '/';
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Erro na conexão:', error);
+                // Usar dados do localStorage em caso de erro de rede
+                const savedUser = JSON.parse(localStorage.getItem('user') || 'null');
+                if (savedUser) {
+                    currentUser = savedUser;
+                    displayUserInfo();
+                    displayUserPhoto();
+                }
+            }
+        }
+
+        // Inicializar
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔄 Inicializando página Profile...');
+            
+            // Verificar se usuário está logado
+            const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+            if (!token) {
+                console.log('🔒 Acesso negado - redirecionando para login');
+                window.location.href = '/';
+                return;
+            }
+            
+            // Inicializar com dados padrão primeiro
+            initializeDefaultServices();
+            
+            // Carregar dados reais do servidor
+            loadUserProfile();
+            
+            // Carregar serviços do servidor em background
+            loadServicesFromServer().then(() => {
+                if (currentUser) {
+                    displayUserInfo();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

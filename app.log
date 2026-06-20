@@ -1,0 +1,25 @@
+nohup: ignoring input
+✅ SendGrid configurado com API key e from email
+📧 Email remetente: contato@ajudex.com
+🔑 API Key presente: SG.RXKKZv-...
+🌐 Configurando upload para S3...
+   - Bucket: ajudex-uploads-prod
+   - Região: eu-north-1
+🌐 S3 Config:
+   - Região: eu-north-1
+   - Bucket: ajudex-uploads-prod
+   - Access Key: ✅ Configurada
+   - Secret Key: ✅ Configurada
+☁️ Uploads configurados para S3 - não servindo arquivos locais
+💾 Sistema iniciado - Dados persistentes com PostgreSQL + intersecção bidirecional
+🚀 AjudeX Development Server
+📱 URL: http://localhost:3000
+🔧 Health: http://localhost:3000/api/health
+📊 Stats: http://localhost:3000/api/stats
+💾 Persistência: PostgreSQL (migração completa!)
+(node:781305) NOTE: The AWS SDK for JavaScript (v2) is in maintenance mode.
+ SDK releases are limited to address critical bug fixes and security issues only.
+
+Please migrate your code to use AWS SDK for JavaScript (v3).
+For more information, check the blog post at https://a.co/cUPnyil
+(Use `node --trace-warnings ...` to show where the warning was created)

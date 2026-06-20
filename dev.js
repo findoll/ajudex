@@ -1,0 +1,2572 @@
+// Servidor de desenvolvimento para AjudeX
+const express = require("express");
+const cors = require("cors");
+const path = require("path");
+const multer = require("multer");
+const fs = require("fs");
+const sgMail = require("@sendgrid/mail");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const jwt = require("jsonwebtoken");
+const dns = require("dns").promises;
+
+// Importar serviço de banco PostgreSQL
+const databaseService = require("./server/database-service.js");
+
+// Importar funções de autenticação com bcrypt
+const { hashPassword, verifyPassword } = require("./server/auth.js");
+
+// JWT Secret para autenticação
+const JWT_SECRET = process.env.JWT_SECRET || "ajudex-dev-secret-2025";
+
+// Middleware de autenticação JWT
+const authenticateJWT = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
+    return res.status(401).json({
+      success: false,
+      message: "Token de acesso não fornecido",
+    });
+  }
+
+  const token = authHeader.split(" ")[1]; // Bearer TOKEN
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      message: "Token de acesso inválido",
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    console.log("🔍 Token decodificado no middleware:", decoded);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    console.error("❌ Erro na verificação do token:", error);
+    return res.status(403).json({
+      success: false,
+      message: "Token de acesso expirado ou inválido",
+    });
+  }
+};
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Configure SendGrid
+if (process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+  console.log("✅ SendGrid configurado com API key e from email");
+  console.log(`📧 Email remetente: ${process.env.SENDGRID_FROM_EMAIL}`);
+  console.log(
+    `🔑 API Key presente: ${process.env.SENDGRID_API_KEY.substring(0, 10)}...`,
+  );
+} else {
+  console.warn("⚠️ Configuração SendGrid incompleta");
+  console.log(`   - API Key: ${process.env.SENDGRID_API_KEY ? "✅" : "❌"}`);
+  console.log(
+    `   - From Email: ${process.env.SENDGRID_FROM_EMAIL ? "✅" : "❌"}`,
+  );
+}
+
+// Armazenamento temporário para códigos de recuperação (em produção usar banco de dados)
+const resetCodes = new Map();
+
+// Configurar upload de fotos
+let upload;
+
+// Função para criar configuração de upload local (CORREÇÃO S3)
+function createLocalUpload() {
+  const uploadDir = path.join(__dirname, "uploads");
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+  console.log("📁 Diretório de upload verificado/criado:", uploadDir);
+
+  const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+      console.log("🔧 Multer destination callback:", uploadDir);
+      cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+      const userId = req.user?.userId || "anonymous";
+      const fileExtension = path.extname(file.originalname);
+      const filename = `profile-${userId}${fileExtension}`;
+      console.log(
+        "🔧 Multer filename callback gerando:",
+        filename,
+        "para usuário ID:",
+        userId,
+      );
+      cb(null, filename);
+    },
+  });
+
+  return multer({
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+      console.log("🔧 Multer fileFilter chamado:", {
+        fieldname: file.fieldname,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+      });
+
+      if (file.mimetype.startsWith("image/")) {
+        console.log("✅ Arquivo aprovado pelo filtro");
+        cb(null, true);
+      } else {
+        console.log("❌ Arquivo rejeitado - não é imagem");
+        cb(new Error("Apenas imagens são permitidas"), false);
+      }
+    },
+  });
+}
+
+// Verificar se tem configuração S3 disponível
+if (
+  process.env.AWS_ACCESS_KEY_ID &&
+  process.env.AWS_SECRET_ACCESS_KEY &&
+  process.env.AWS_S3_BUCKET_NAME
+) {
+  // S3: Upload para nuvem
+  console.log("🌐 Configurando upload para S3...");
+  console.log(`   - Bucket: ${process.env.AWS_S3_BUCKET_NAME}`);
+  console.log(`   - Região: ${process.env.AWS_REGION || "eu-north-1"}`);
+  try {
+    const { uploadS3 } = require("./server/s3-config-v3");
+    upload = uploadS3;
+    console.log("✅ Upload S3 configurado com sucesso");
+  } catch (error) {
+    console.log(
+      "❌ Erro ao configurar S3, usando upload local:",
+      error.message,
+    );
+    // Fallback para upload local
+    upload = createLocalUpload();
+  }
+} else {
+  // DESENVOLVIMENTO: Upload local (código atual)
+  console.log(
+    "💻 Configurando upload local (credenciais AWS não disponíveis)...",
+  );
+  upload = createLocalUpload();
+}
+
+// Middlewares
+app.use(cors());
+app.use(express.json());
+
+// Servir uploads locais apenas quando não temos S3 configurado
+if (
+  !(
+    process.env.AWS_ACCESS_KEY_ID &&
+    process.env.AWS_SECRET_ACCESS_KEY &&
+    process.env.AWS_S3_BUCKET_NAME
+  )
+) {
+  const uploadDir = path.join(__dirname, "uploads");
+  app.use("/uploads", express.static(uploadDir));
+  console.log("📁 Servindo uploads locais em /uploads");
+} else {
+  console.log("☁️ Uploads configurados para S3 - não servindo arquivos locais");
+}
+
+// Servir arquivos estáticos do client e root
+app.use(express.static(path.join(__dirname, "client")));
+app.use(express.static(__dirname)); // Para servir arquivos na raiz como test-chat-reload.html
+
+// Servir a página principal (login como home)
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "client", "index.html"));
+});
+
+// Redirecionar /login para home
+app.get("/login", (req, res) => {
+  res.redirect("/");
+});
+
+// Servir página de discovery
+app.get("/discovery", (req, res) => {
+  res.sendFile(path.join(__dirname, "client", "discovery.html"));
+});
+
+// Servir outras páginas
+app.get("/profile", (req, res) => {
+  res.sendFile(path.join(__dirname, "client", "profile.html"));
+});
+
+app.get("/matches", (req, res) => {
+  res.sendFile(path.join(__dirname, "client", "matches.html"));
+});
+
+app.get("/chat", (req, res) => {
+  res.sendFile(path.join(__dirname, "client", "chat.html"));
+});
+
+app.get("/premium", (req, res) => {
+  res.sendFile(path.join(__dirname, "client", "premium.html"));
+});
+
+app.get("/test-upload", (req, res) => {
+  res.sendFile(path.join(__dirname, "test-upload-frontend.html"));
+});
+
+// Rota de health check
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    message: "AjudeX Server funcionando",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Endpoint para diagnosticar matches (temporário)
+app.get("/api/debug-matches", async (req, res) => {
+  try {
+    const allMatches = await databaseService.getAllMatches();
+
+    // Agrupar matches por usuários
+    const matchSummary = {};
+
+    for (const match of allMatches) {
+      const key = `${Math.min(match.user1Id, match.user2Id)}-${Math.max(match.user1Id, match.user2Id)}`;
+
+      if (!matchSummary[key]) {
+        matchSummary[key] = {
+          users: `${match.user1Id} ↔ ${match.user2Id}`,
+          matches: [],
+        };
+      }
+
+      matchSummary[key].matches.push({
+        id: match.id,
+        created: match.createdAt,
+      });
+    }
+
+    res.json({
+      success: true,
+      totalMatches: allMatches.length,
+      uniquePairs: Object.keys(matchSummary).length,
+      summary: matchSummary,
+    });
+  } catch (error) {
+    console.error("Erro ao diagnosticar matches:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// Endpoint para remover match duplicado (temporário)
+app.delete("/api/cleanup-duplicate-matches", async (req, res) => {
+  try {
+    // Remover o match mais antigo entre usuários 17-18
+    await databaseService.deleteMatch(11); // Match mais antigo
+
+    console.log("🧹 Match duplicado removido (ID: 11)");
+
+    res.json({
+      success: true,
+      message: "Match duplicado removido com sucesso",
+    });
+  } catch (error) {
+    console.error("Erro ao remover match duplicado:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// ✅ DADOS MIGRADOS PARA POSTGRESQL - Removidos arrays em memória
+// Todos os dados agora são persistentes via databaseService
+
+// ✅ MIGRAÇÃO PARA POSTGRESQL COMPLETA
+console.log(
+  "💾 Sistema iniciado - Dados persistentes com PostgreSQL + intersecção bidirecional",
+);
+
+// Cache em memória para views (pode ser melhorado para usar Redis)
+const userViews = {}; // {userId: [viewedUserIds]}
+
+// Rota para listar serviços - 37 serviços em ordem alfabética
+app.get("/api/services", (req, res) => {
+  try {
+    const services = [
+      { id: 12, name: "Aulas de Inglês", icon: "🇺🇸", category: "Educação" },
+      { id: 13, name: "Aulas de Matemática", icon: "🔢", category: "Educação" },
+      { id: 14, name: "Aulas de Música", icon: "🎵", category: "Educação" },
+      { id: 21, name: "Cabeleireiro", icon: "💇", category: "Beleza" },
+      { id: 20, name: "Consultoria em TI", icon: "📱", category: "Digital" },
+      { id: 31, name: "Consultoria Juridica", icon: "⚖️", category: "Outros" },
+      { id: 27, name: "Costura", icon: "🪡", category: "Outros" },
+      { id: 32, name: "Cuidador", icon: "🤗", category: "Outros" },
+      { id: 9, name: "Culinária", icon: "👩‍🍳", category: "Alimentação" },
+      { id: 33, name: "Depilação", icon: "✨", category: "Beleza" },
+      { id: 17, name: "Design Gráfico", icon: "🎨", category: "Digital" },
+      { id: 18, name: "Desenvolvimento Web", icon: "💻", category: "Digital" },
+      { id: 10, name: "Doces e Bolos", icon: "🎂", category: "Alimentação" },
+      { id: 19, name: "Edição de Vídeo", icon: "🎬", category: "Digital" },
+      { id: 4, name: "Eletricista", icon: "⚡", category: "Casa" },
+      { id: 3, name: "Encanamento", icon: "🔧", category: "Casa" },
+      { id: 25, name: "Entrega", icon: "🚚", category: "Transporte" },
+      { id: 29, name: "Fotografia", icon: "📸", category: "Outros" },
+      { id: 2, name: "Jardinagem", icon: "🌱", category: "Casa" },
+      { id: 1, name: "Limpeza", icon: "🧹", category: "Casa" },
+      { id: 22, name: "Manicure", icon: "💅", category: "Beleza" },
+      { id: 23, name: "Maquiagem", icon: "💄", category: "Beleza" },
+      { id: 6, name: "Marcenaria", icon: "🪚", category: "Casa" },
+      { id: 11, name: "Marmitas", icon: "🍱", category: "Alimentação" },
+      { id: 36, name: "Massoterapia", icon: "💆", category: "Saúde" },
+      { id: 26, name: "Motorista", icon: "🚗", category: "Transporte" },
+      { id: 24, name: "Mudanças", icon: "📦", category: "Transporte" },
+      { id: 7, name: "Pedreiro", icon: "🧱", category: "Casa" },
+      { id: 30, name: "Personal Trainer", icon: "💪", category: "Outros" },
+      { id: 28, name: "Pet Care", icon: "🐕", category: "Outros" },
+      { id: 5, name: "Pintura", icon: "🎨", category: "Casa" },
+      { id: 15, name: "Reforço Escolar", icon: "📚", category: "Educação" },
+      { id: 37, name: "Reparo Carro&Moto", icon: "🔧", category: "Transporte" },
+      { id: 34, name: "Sapateiro", icon: "👞", category: "Outros" },
+      { id: 35, name: "Tattoo e Piercing", icon: "🔗", category: "Beleza" },
+      { id: 16, name: "Tradução", icon: "🌐", category: "Educação" },
+      { id: 8, name: "Vidraceiro", icon: "🪟", category: "Casa" },
+    ];
+
+    console.log("✅ API /api/services: Retornando 37 serviços");
+    res.json(services);
+  } catch (error) {
+    console.error("❌ Erro crítico em /api/services:", error);
+    res.status(500).json({
+      error: "Erro interno do servidor",
+      message: "Falha ao carregar serviços",
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+// Verificar se email já existe
+app.post("/api/check-email", async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: "Email é obrigatório" });
+  }
+
+  // Verificar no PostgreSQL
+  const existingUser = await databaseService.getUserByEmail(email);
+  const emailExists = !!existingUser;
+
+  if (emailExists) {
+    console.log(`📧 Email ${email} já existe na base de dados`);
+    return res.status(200).json({
+      exists: true,
+      message: "Email já cadastrado",
+    });
+  }
+
+  console.log(`📧 Email ${email} disponível para cadastro`);
+  res.status(200).json({
+    exists: false,
+    message: "Email disponível",
+  });
+});
+
+// Endpoint para validar domínio do email
+app.post("/api/validate-email-domain", async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({
+      success: false,
+      message: "Email é obrigatório",
+    });
+  }
+
+  // Validar formato básico do email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({
+      success: false,
+      message: "Formato de email inválido",
+      error: "INVALID_EMAIL_FORMAT",
+    });
+  }
+
+  const emailDomain = email.split("@")[1];
+
+  try {
+    console.log(`🌐 Validando domínio: ${emailDomain}`);
+    await dns.lookup(emailDomain);
+    console.log(`✅ Domínio ${emailDomain} é válido`);
+
+    res.status(200).json({
+      success: true,
+      valid: true,
+      message: "Domínio do email é válido",
+      domain: emailDomain,
+    });
+  } catch (dnsError) {
+    console.log(`❌ Domínio ${emailDomain} não existe:`, dnsError.message);
+    res.status(400).json({
+      success: false,
+      valid: false,
+      message: `O domínio "${emailDomain}" não existe. Verifique se o email está correto.`,
+      error: "INVALID_EMAIL_DOMAIN",
+      domain: emailDomain,
+    });
+  }
+});
+
+// Login com autenticação real
+app.post("/api/login", async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Email e senha obrigatórios",
+    });
+  }
+
+  try {
+    // Buscar usuário por email no PostgreSQL
+    const user = await databaseService.getUserByEmail(email);
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Email ou senha incorretos",
+      });
+    }
+
+    // Validar senha com bcrypt
+    const isValidPassword = await verifyPassword(password, user.password);
+    
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        message: "Email ou senha incorretos",
+      });
+    }
+
+    // Gerar JWT token
+    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    console.log("✅ Login realizado com JWT para:", user.name);
+
+    res.json({
+      success: true,
+      message: "Login realizado com sucesso",
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        photo: user.photo,
+        servicesOffered: user.servicesOffered,
+        servicesWanted: user.servicesWanted,
+        premium: user.premium,
+      },
+      token: token,
+    });
+  } catch (error) {
+    console.error("❌ Erro no login:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro interno do servidor",
+    });
+  }
+});
+
+// Registro completo com validação (sem foto inicialmente)
+app.post("/api/register", async (req, res) => {
+  const {
+    name,
+    email,
+    birthDate,
+    cep,
+    searchRadius,
+    servicesOffered,
+    servicesWanted,
+    password,
+    photo, // Para upload via base64
+  } = req.body;
+
+  console.log(
+    "🔍 Debug cadastro - req.body.photo:",
+    photo ? "presente" : "ausente",
+  );
+  console.log(
+    "🔍 Debug cadastro - req.file:",
+    req.file ? "presente" : "ausente",
+  );
+
+  // Parse arrays if they come as strings (FormData sends as strings)
+  const parsedServicesOffered =
+    typeof servicesOffered === "string"
+      ? JSON.parse(servicesOffered)
+      : servicesOffered;
+  const parsedServicesWanted =
+    typeof servicesWanted === "string"
+      ? JSON.parse(servicesWanted)
+      : servicesWanted;
+
+  // Validações básicas
+  if (!name || !email || !birthDate || !cep || !password) {
+    return res.status(400).json({
+      success: false,
+      message: "Todos os campos obrigatórios devem ser preenchidos",
+    });
+  }
+
+  // Validar idade mínima de 18 anos
+  console.log(
+    `🎂 Validando idade para usuário: ${name}, Data de nascimento: ${birthDate}`,
+  );
+
+  const birthDateObj = new Date(birthDate);
+  const today = new Date();
+
+  console.log(
+    `📅 Hoje: ${today.toISOString().split("T")[0]}, Nascimento: ${birthDateObj.toISOString().split("T")[0]}`,
+  );
+
+  // Calcular idade em anos
+  let age = today.getFullYear() - birthDateObj.getFullYear();
+  const monthDiff = today.getMonth() - birthDateObj.getMonth();
+
+  // Ajustar se ainda não fez aniversário neste ano
+  if (
+    monthDiff < 0 ||
+    (monthDiff === 0 && today.getDate() < birthDateObj.getDate())
+  ) {
+    age--;
+  }
+
+  console.log(`🎂 Idade calculada: ${age} anos`);
+
+  if (age < 18) {
+    console.log(`❌ BLOQUEANDO usuário menor de idade: ${age} anos`);
+    return res.status(400).json({
+      success: false,
+      message: "Você deve ter pelo menos 18 anos para se cadastrar",
+      error: "UNDERAGE_USER",
+      age: age,
+    });
+  }
+
+  console.log(`✅ Usuário tem ${age} anos - idade válida para cadastro`);
+
+  // Validar domínio do email
+  const emailDomain = email.split("@")[1];
+  if (!emailDomain) {
+    return res.status(400).json({
+      success: false,
+      message: "Formato de email inválido",
+      error: "INVALID_EMAIL_FORMAT",
+    });
+  }
+
+  try {
+    console.log(`🌐 Verificando domínio do email: ${emailDomain}`);
+    await dns.lookup(emailDomain);
+    console.log(`✅ Domínio ${emailDomain} é válido`);
+  } catch (dnsError) {
+    console.log(`❌ Domínio ${emailDomain} não existe:`, dnsError.message);
+    return res.status(400).json({
+      success: false,
+      message: `O domínio "${emailDomain}" não existe. Verifique se o email está correto.`,
+      error: "INVALID_EMAIL_DOMAIN",
+      domain: emailDomain,
+    });
+  }
+
+  // Foto não é mais obrigatória no registro inicial
+  // Será feita em uma segunda etapa com ID correto
+
+  // Verificar se email já existe no PostgreSQL
+  const existingUser = await databaseService.getUserByEmail(email);
+
+  if (existingUser) {
+    console.log(`❌ Tentativa de cadastro com email já existente: ${email}`);
+    return res.status(409).json({
+      message: "Email já cadastrado",
+      error: "EMAIL_ALREADY_EXISTS",
+      exists: true,
+    });
+  }
+
+  // Validate password
+  if (password.length < 8) {
+    return res.status(400).json({
+      success: false,
+      message: "A senha deve ter pelo menos 8 caracteres",
+    });
+  }
+
+  // Check for alphanumeric (letters and numbers)
+  const hasLetter = /[a-zA-Z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+
+  if (!hasLetter || !hasNumber) {
+    return res.status(400).json({
+      success: false,
+      message: "A senha deve conter letras e números",
+    });
+  }
+
+  // Check for special character
+  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+
+  if (!hasSpecial) {
+    return res.status(400).json({
+      success: false,
+      message: "A senha deve conter ao menos um caractere especial",
+    });
+  }
+
+  if (!searchRadius || searchRadius < 5 || searchRadius > 30) {
+    return res.status(400).json({
+      success: false,
+      message: "Raio de busca deve estar entre 5 e 30 km",
+    });
+  }
+
+  if (!parsedServicesOffered || parsedServicesOffered.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Selecione pelo menos um serviço que você oferece",
+    });
+  }
+
+  if (parsedServicesOffered.length > 4) {
+    return res.status(400).json({
+      success: false,
+      message: "Você pode selecionar no máximo 4 serviços oferecidos",
+      error: "TOO_MANY_SERVICES_OFFERED",
+      maxAllowed: 4,
+      selected: parsedServicesOffered.length,
+    });
+  }
+
+  if (!parsedServicesWanted || parsedServicesWanted.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "Selecione pelo menos um serviço que você precisa",
+    });
+  }
+
+  // Validar CEP
+  const cepClean = cep.replace(/\D/g, "");
+  if (cepClean.length !== 8) {
+    return res.status(400).json({
+      success: false,
+      message: "CEP deve conter 8 dígitos",
+    });
+  }
+
+  try {
+    // Validar CEP com ViaCEP
+    const axios = require("axios");
+    const cepResponse = await axios.get(
+      `https://viacep.com.br/ws/${cepClean}/json/`,
+    );
+
+    if (cepResponse.data.erro) {
+      return res.status(400).json({
+        success: false,
+        message: "CEP inválido",
+      });
+    }
+
+    const { localidade: city, uf: state } = cepResponse.data;
+
+    // Foto será adicionada após o registro com o ID correto
+    let photoUrl = null;
+
+    console.log("✅ Cadastro realizado:", {
+      name,
+      email,
+      birthDate,
+      cep: cepClean,
+      city,
+      state,
+      searchRadius,
+      servicesOffered: parsedServicesOffered.length,
+      servicesWanted: parsedServicesWanted.length,
+      photo: photoUrl,
+    });
+
+    // Criar usuário no PostgreSQL
+    const newUser = await databaseService.createUser({
+      name,
+      email: email.toLowerCase(),
+      password: await hashPassword(password), // Hash da senha com bcrypt
+      photo: photoUrl,
+      birthDate,
+      cep: cepClean,
+      city,
+      state,
+      searchRadius: parseInt(searchRadius),
+      servicesOffered: parsedServicesOffered,
+      servicesWanted: parsedServicesWanted,
+      premium: false,
+      premiumExpiresAt: null,
+    });
+
+    // Gerar JWT token para login automático
+    const token = jwt.sign(
+      { userId: newUser.id, email: newUser.email },
+      JWT_SECRET,
+      { expiresIn: "7d" },
+    );
+
+    res.status(201).json({
+      success: true,
+      message: "Cadastro realizado com sucesso!",
+      user: newUser,
+      token: token,
+      needsPhoto: true, // Indica que ainda precisa fazer upload da foto
+    });
+  } catch (error) {
+    console.error("Erro no cadastro:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro interno do servidor",
+    });
+  }
+});
+
+// Upload de foto durante o registro (usando o ID do usuário recém-criado)
+app.post(
+  "/api/register-photo",
+  authenticateJWT,
+  async (req, res, next) => {
+    console.log("📥 Upload de foto durante registro iniciado");
+    console.log("🔍 User ID:", req.user?.userId);
+
+    // Usar uploadS3 se estiver configurado, senão usar multer local
+    if (
+      process.env.AWS_ACCESS_KEY_ID &&
+      process.env.AWS_SECRET_ACCESS_KEY &&
+      process.env.AWS_S3_BUCKET_NAME
+    ) {
+      console.log("☁️ Usando S3 para upload de foto do registro");
+      const { uploadS3 } = require("./server/s3-config-v3");
+      uploadS3.single("photo")(req, res, next);
+    } else {
+      console.log("💻 Usando storage local para upload de foto do registro");
+      upload.single("photo")(req, res, next);
+    }
+  },
+  async (req, res) => {
+    try {
+      console.log("📷 ===== UPLOAD FOTO REGISTRO =====");
+      console.log("🔍 Arquivo recebido:", req.file ? "SIM" : "NÃO");
+      console.log(
+        "🔍 Usuário autenticado:",
+        req.user ? req.user.userId : "NÃO",
+      );
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          message: "Nenhuma foto foi enviada",
+        });
+      }
+
+      let photoUrl;
+      let fileName;
+
+      // Verificar se é S3 ou local
+      if (
+        process.env.AWS_ACCESS_KEY_ID &&
+        process.env.AWS_SECRET_ACCESS_KEY &&
+        process.env.AWS_S3_BUCKET_NAME
+      ) {
+        // S3: Usar key que já tem o padrão correto
+        fileName = req.file.key;
+        photoUrl = `/api/photo/${fileName}`;
+
+        console.log(`📷 ✅ Foto de registro enviada para S3:`);
+        console.log(`   - Key: ${fileName}`);
+        console.log(`   - URL via API: ${photoUrl}`);
+        console.log(`   - Location: ${req.file.location}`);
+        console.log(`   - Bucket: ${process.env.AWS_S3_BUCKET_NAME}`);
+      } else {
+        // LOCAL: Renomear arquivo para usar padrão correto
+        const path = require("path");
+        const fs = require("fs");
+
+        const fileExtension = path.extname(req.file.originalname);
+        const newFileName = `profile-${req.user.userId}${fileExtension}`;
+        const oldPath = req.file.path;
+        const newPath = path.join(req.file.destination, newFileName);
+
+        // Renomear arquivo
+        fs.renameSync(oldPath, newPath);
+
+        fileName = newFileName;
+        photoUrl = `/api/photo/uploads/${fileName}`;
+
+        console.log(`📷 ✅ Foto de registro salva localmente:`);
+        console.log(`   - Nome: ${fileName}`);
+        console.log(`   - URL via API: ${photoUrl}`);
+        console.log(`   - Caminho: uploads/${fileName}`);
+      }
+
+      console.log("💾 Atualizando foto do usuário no banco de dados...");
+      console.log("📂 Salvando nome do arquivo:", fileName);
+
+      // Atualizar foto do usuário no banco de dados
+      const updatedUser = await databaseService.updateUser(req.user.userId, {
+        photo: fileName,
+      });
+
+      console.log("✅ Foto de registro atualizada com sucesso");
+      console.log("👤 Usuário atualizado:", updatedUser.id, updatedUser.name);
+
+      res.json({
+        success: true,
+        message: "Foto enviada com sucesso!",
+        photoUrl: photoUrl,
+        user: updatedUser,
+      });
+    } catch (error) {
+      console.error("❌ Erro ao fazer upload da foto do registro:", error);
+      res.status(500).json({
+        success: false,
+        message: "Erro ao enviar foto: " + error.message,
+      });
+    }
+  },
+);
+
+// Rota de teste SendGrid
+app.post("/api/test-sendgrid", async (req, res) => {
+  const { email = "test@exemplo.com" } = req.body;
+
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
+    return res.status(500).json({
+      success: false,
+      message: "Configuração SendGrid incompleta",
+      config: {
+        hasApiKey: !!process.env.SENDGRID_API_KEY,
+        hasFromEmail: !!process.env.SENDGRID_FROM_EMAIL,
+      },
+    });
+  }
+
+  const testMsg = {
+    to: email,
+    from: {
+      email: process.env.SENDGRID_FROM_EMAIL,
+      name: "AjudeX Test",
+    },
+    subject: "Teste SendGrid - AjudeX",
+    text: "Email de teste enviado com sucesso!",
+    html: "<p>Email de teste enviado com <strong>sucesso</strong>!</p>",
+  };
+
+  try {
+    console.log("🧪 Testando SendGrid...");
+    console.log(`📧 Para: ${email}`);
+    console.log(`📧 De: ${process.env.SENDGRID_FROM_EMAIL}`);
+
+    await sgMail.send(testMsg);
+
+    console.log("✅ Teste SendGrid bem-sucedido!");
+    res.json({
+      success: true,
+      message: "Email de teste enviado com sucesso!",
+      details: {
+        to: email,
+        from: process.env.SENDGRID_FROM_EMAIL,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Falha no teste SendGrid:", {
+      message: error.message,
+      code: error.code,
+      response: error.response?.body,
+    });
+
+    res.status(500).json({
+      success: false,
+      message: "Falha no teste SendGrid",
+      error: {
+        message: error.message,
+        code: error.code,
+        details: error.response?.body,
+      },
+    });
+  }
+});
+
+// Buscar dados do perfil do usuário autenticado
+app.get("/api/profile", authenticateJWT, async (req, res) => {
+  try {
+    const user = await databaseService.getUserById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Usuário não encontrado",
+      });
+    }
+
+    console.log("✅ Dados do perfil carregados:", user.name);
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        photo: user.photo,
+        birthDate: user.birthDate,
+        cep: user.cep,
+        city: user.city,
+        state: user.state,
+        searchRadius: user.searchRadius,
+        servicesOffered: user.servicesOffered,
+        servicesWanted: user.servicesWanted,
+        premium: user.premium,
+        premiumExpiryDate: user.premiumExpiryDate,
+        createdAt: user.createdAt,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Erro ao carregar perfil:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro interno do servidor",
+    });
+  }
+});
+
+// Função para deletar foto anterior do S3
+const deleteOldPhotoFromS3 = async (fileName) => {
+  if (!fileName || !process.env.AWS_ACCESS_KEY_ID) {
+    return;
+  }
+
+  try {
+    const { s3Client } = require("./server/s3-config-v3");
+    const bucketName = process.env.AWS_S3_BUCKET_NAME || "ajudex-uploads-prod";
+
+    console.log(
+      `🗑️ Tentando deletar foto antiga: ${fileName} do bucket ${bucketName}`,
+    );
+
+    const { DeleteObjectCommand } = require("@aws-sdk/client-s3");
+    await s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: bucketName,
+        Key: fileName,
+      }),
+    );
+
+    console.log(`✅ Foto antiga deletada com sucesso: ${fileName}`);
+  } catch (error) {
+    console.log(
+      `⚠️ Não foi possível deletar foto antiga ${fileName}:`,
+      error.message,
+    );
+    // Não retornamos erro aqui pois o upload principal deve continuar
+  }
+};
+
+// Upload de foto do perfil
+app.post(
+  "/api/upload-photo",
+  authenticateJWT,
+  async (req, res, next) => {
+    console.log("📥 Requisição de upload recebida");
+    console.log("🔍 Content-Type:", req.headers["content-type"]);
+    console.log("🔍 Authorization presente:", !!req.headers.authorization);
+
+    // Buscar foto atual do usuário antes do upload
+    let currentPhoto = null;
+    try {
+      const currentUser = await databaseService.getUserById(req.user.userId);
+      currentPhoto = currentUser?.photo;
+      console.log("🔍 Foto atual do usuário:", currentPhoto);
+    } catch (error) {
+      console.log("⚠️ Erro ao buscar foto atual:", error.message);
+    }
+
+    upload.single("photo")(req, res, async (error) => {
+      if (error) {
+        console.error("❌ Erro no middleware multer:", error.message);
+        console.error("❌ Stack trace multer:", error.stack);
+        console.error("❌ Código de erro:", error.code);
+        return res.status(400).json({
+          success: false,
+          message: "Erro no processamento do arquivo: " + error.message,
+        });
+      }
+      console.log("✅ Middleware multer processado com sucesso");
+
+      // Se havia uma foto anterior e conseguimos fazer upload da nova, deletar a antiga
+      if (currentPhoto && req.file) {
+        await deleteOldPhotoFromS3(currentPhoto);
+      }
+
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      console.log("📷 ===== INÍCIO UPLOAD FOTO =====");
+      console.log("🔍 Arquivo recebido:", req.file ? "SIM" : "NÃO");
+      console.log(
+        "🔍 Usuário autenticado:",
+        req.user ? req.user.userId : "NÃO",
+      );
+      console.log("🔍 Configuração S3:", {
+        hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+        hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
+        hasBucketName: !!process.env.AWS_S3_BUCKET_NAME,
+        region: process.env.AWS_REGION || "eu-north-1",
+        bucketName: process.env.AWS_S3_BUCKET_NAME,
+      });
+
+      if (!req.file) {
+        console.log("❌ Nenhum arquivo enviado - req.file está vazio");
+        console.log("❌ Headers da requisição:", req.headers);
+        console.log("❌ Corpo da requisição (body):", req.body);
+        return res.status(400).json({
+          success: false,
+          message:
+            "Nenhuma foto foi enviada. Verifique se o arquivo foi selecionado corretamente.",
+        });
+      }
+
+      console.log("📂 Detalhes completos do arquivo recebido:", {
+        filename: req.file.filename,
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size,
+        key: req.file.key,
+        location: req.file.location,
+        bucket: req.file.bucket,
+        encoding: req.file.encoding,
+        fieldname: req.file.fieldname,
+      });
+
+      let photoUrl;
+      let fileName;
+
+      // Verificar se é S3 ou local
+      if (
+        process.env.AWS_ACCESS_KEY_ID &&
+        process.env.AWS_SECRET_ACCESS_KEY &&
+        process.env.AWS_S3_BUCKET_NAME
+      ) {
+        // S3: Verificar se upload foi bem-sucedido
+        if (!req.file.key) {
+          console.error("❌ Upload S3 falhou - req.file.key está vazio");
+          console.error("❌ Objeto req.file completo:", req.file);
+          return res.status(500).json({
+            success: false,
+            message: "Erro no upload para S3 - chave do arquivo não encontrada",
+          });
+        }
+
+        fileName = req.file.key; // Nome do arquivo no S3
+        photoUrl = `/api/photo/${fileName}`; // URL via nosso endpoint
+
+        console.log(`📷 ✅ Foto enviada para S3 com sucesso:`);
+        console.log(`   - Key/Nome: ${fileName}`);
+        console.log(`   - URL S3 direta: ${req.file.location}`);
+        console.log(`   - URL via API: ${photoUrl}`);
+        console.log(`   - Bucket: ${process.env.AWS_S3_BUCKET_NAME}`);
+        console.log(`   - Region: ${process.env.AWS_REGION || "eu-north-1"}`);
+      } else {
+        // LOCAL: Usar nome do arquivo local
+        if (!req.file.filename) {
+          console.error(
+            "❌ Upload local falhou - req.file.filename está vazio",
+          );
+          console.error("❌ Objeto req.file completo:", req.file);
+          return res.status(500).json({
+            success: false,
+            message: "Erro no upload local - nome do arquivo não encontrado",
+          });
+        }
+
+        fileName = req.file.filename;
+        photoUrl = `/api/photo/${fileName}`; // URL via nosso endpoint
+
+        console.log(`📷 ✅ Foto enviada localmente:`);
+        console.log(`   - Nome: ${fileName}`);
+        console.log(`   - URL via API: ${photoUrl}`);
+        console.log(`   - Caminho: uploads/${fileName}`);
+      }
+
+      console.log("💾 Atualizando foto no banco de dados...");
+      console.log("📂 Salvando nome do arquivo:", fileName);
+
+      // Atualizar foto do usuário no banco de dados
+      // IMPORTANTE: Salvamos o nome do arquivo/key, não a URL completa
+      // Isso permite buscar depois no diretório correto
+      const updatedUser = await databaseService.updateUser(req.user.userId, {
+        photo: fileName, // Salvamos apenas o nome/key do arquivo
+      });
+
+      console.log(
+        `✅ Foto do perfil atualizada no banco para usuário: ${updatedUser.name}`,
+      );
+      console.log(`📍 Nome do arquivo salvo: ${fileName}`);
+      console.log(`📍 URL para retorno: ${photoUrl}`);
+      console.log("📷 ===== UPLOAD CONCLUÍDO COM SUCESSO =====");
+
+      res.json({
+        success: true,
+        message: "Foto do perfil atualizada com sucesso",
+        photoUrl: photoUrl, // Retornamos a URL para o frontend
+        fileName: fileName, // E também o nome do arquivo
+        user: updatedUser,
+      });
+    } catch (error) {
+      console.error("❌ ===== ERRO CRÍTICO NO UPLOAD =====");
+      console.error("❌ Erro principal:", error.message);
+      console.error("❌ Stack trace:", error.stack);
+      console.error("❌ Detalhes do arquivo:", req.file);
+      console.error("❌ Headers da requisição:", req.headers);
+      console.error("❌ Configuração S3:", {
+        hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+        hasSecretKey: !!process.env.AWS_SECRET_ACCESS_KEY,
+        hasBucketName: !!process.env.AWS_S3_BUCKET_NAME,
+        bucketName: process.env.AWS_S3_BUCKET_NAME,
+        region: process.env.AWS_REGION || "eu-north-1",
+      });
+      console.error("❌ ===== FIM ERRO CRÍTICO =====");
+
+      res.status(500).json({
+        success: false,
+        message: "Erro interno do servidor ao salvar foto",
+        error: error.message,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  },
+);
+
+// Servir fotos de perfil (S3 ou local) - aceita caminhos aninhados
+app.get("/api/photo/*", async (req, res) => {
+  try {
+    const filename = req.params[0]; // Captura todo o caminho após /api/photo/
+    console.log("🖼️ Solicitação de foto:", filename);
+
+    // Verificar se é S3 ou local
+    if (
+      process.env.AWS_ACCESS_KEY_ID &&
+      process.env.AWS_SECRET_ACCESS_KEY &&
+      process.env.AWS_S3_BUCKET_NAME
+    ) {
+      // S3: Fazer download do objeto e servir através do servidor
+      try {
+        const { s3Client } = require("./server/s3-config-v3");
+        console.log("☁️ Fazendo download direto do S3:", filename);
+
+        const params = {
+          Bucket: process.env.AWS_S3_BUCKET_NAME,
+          Key: filename,
+        };
+
+        // Obter metadados do objeto
+        const {
+          HeadObjectCommand,
+          GetObjectCommand,
+        } = require("@aws-sdk/client-s3");
+        const headData = await s3Client.send(new HeadObjectCommand(params));
+
+        // Configurar cabeçalhos de resposta
+        res.set({
+          "Content-Type": headData.ContentType || "image/jpeg",
+          "Content-Length": headData.ContentLength,
+          "Cache-Control": "public, max-age=3600", // Cache por 1 hora
+          ETag: headData.ETag,
+        });
+
+        // Obter objeto do S3 e pipe para resposta
+        const response = await s3Client.send(new GetObjectCommand(params));
+        const stream = response.Body;
+
+        stream.on("error", (error) => {
+          console.error("❌ Erro no stream do S3:", error);
+          if (!res.headersSent) {
+            res.status(500).json({ error: "Erro ao carregar foto do S3" });
+          }
+        });
+
+        stream.pipe(res);
+      } catch (error) {
+        console.error("❌ Erro ao acessar S3:", error);
+        if (error.code === "NoSuchKey") {
+          res.status(404).json({ error: "Foto não encontrada no S3" });
+        } else {
+          res.status(500).json({ error: "Erro ao acessar foto no S3" });
+        }
+      }
+    } else {
+      // LOCAL: Servir arquivo local
+      const localPath = path.join(__dirname, "uploads", filename);
+      console.log("💻 Servindo arquivo local:", localPath);
+
+      // Verificar se arquivo existe
+      if (fs.existsSync(localPath)) {
+        res.sendFile(localPath);
+      } else {
+        console.log("❌ Arquivo não encontrado:", localPath);
+        res.status(404).json({ error: "Foto não encontrada" });
+      }
+    }
+  } catch (error) {
+    console.error("❌ Erro ao servir foto:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// Atualizar perfil do usuário
+app.put("/api/update-profile", authenticateJWT, async (req, res) => {
+  try {
+    const {
+      name,
+      birthDate,
+      cep,
+      searchRadius,
+      city,
+      state,
+      servicesOffered,
+      servicesWanted,
+      photo,
+    } = req.body;
+
+    // Validações básicas
+    if (!name || !birthDate || !cep || !searchRadius) {
+      return res.status(400).json({
+        success: false,
+        message: "Todos os campos são obrigatórios",
+      });
+    }
+
+    // Validar CEP
+    const cepClean = cep.toString().replace(/\D/g, "");
+    if (cepClean.length !== 8) {
+      return res.status(400).json({
+        success: false,
+        message: "CEP deve ter 8 dígitos",
+      });
+    }
+
+    // Validar raio de busca
+    if (searchRadius < 5 || searchRadius > 30) {
+      return res.status(400).json({
+        success: false,
+        message: "Raio de busca deve estar entre 5 e 30 km",
+      });
+    }
+
+    console.log("✏️ Atualizando perfil:", {
+      name,
+      birthDate,
+      cep: cepClean,
+      searchRadius,
+      city,
+      state,
+    });
+
+    // Atualizar no banco de dados
+    const updateData = {
+      name,
+      birthDate,
+      cep: cepClean,
+      searchRadius,
+      city,
+      state,
+    };
+
+    if (servicesOffered) updateData.servicesOffered = servicesOffered;
+    if (servicesWanted) updateData.servicesWanted = servicesWanted;
+    if (photo) updateData.photo = photo;
+
+    const updatedUser = await databaseService.updateUser(
+      req.user.userId,
+      updateData,
+    );
+
+    res.json({
+      success: true,
+      message: "Perfil atualizado com sucesso",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("❌ Erro ao atualizar perfil:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro interno do servidor",
+    });
+  }
+});
+
+// Esqueci minha senha - Enviar código de recuperação
+app.post("/api/forgot-password", async (req, res) => {
+  const { email } = req.body;
+  
+  console.log('📧 Email recebido do frontend:', email);
+  console.log('📧 Tipo do email:', typeof email);
+
+  if (!email) {
+    return res.status(400).json({
+      success: false,
+      message: "Email é obrigatório",
+    });
+  }
+
+  // Validar formato do email
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({
+      success: false,
+      message: "Email inválido",
+    });
+  }
+
+  try {
+    // Gerar código de 6 dígitos
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Armazenar código com expiração de 10 minutos
+    resetCodes.set(email, {
+      code: resetCode,
+      expires: Date.now() + 10 * 60 * 1000,
+      attempts: 0,
+    });
+
+    // Configurar email
+    const fromEmail = process.env.SENDGRID_FROM_EMAIL || "noreply@sendgrid.net";
+    const msg = {
+      to: email,
+      from: {
+        email: fromEmail,
+        name: "AjudeX",
+      },
+      subject: "Seu código de verificação: AjudeX",
+      text: `Seu código de recuperação é: ${resetCode}. Válido por 10 minutos.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <div style="background: linear-gradient(135deg, #ff9a9e, #fecfef, #9bb5ff); padding: 30px; border-radius: 15px; text-align: center; color: white;">
+            <h1 style="margin: 0; font-size: 2.5rem;">AjudeX</h1>
+            <p style="margin: 10px 0 0; font-size: 1.2rem;">Plataforma de Troca de Serviços</p>
+          </div>
+          
+          <div style="background: white; padding: 30px; border-radius: 15px; margin-top: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+            <h2 style="color: #333; margin-bottom: 20px;">Recuperação de Senha</h2>
+            <p style="color: #666; line-height: 1.6; margin-bottom: 25px;">
+              Recebemos uma solicitação para redefinir a senha da sua conta. Use o código abaixo para criar uma nova senha:
+            </p>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; text-align: center; margin: 25px 0;">
+              <div style="font-size: 2rem; font-weight: bold; color: #ff9a9e; letter-spacing: 5px;">${resetCode}</div>
+              <p style="margin: 10px 0 0; color: #666; font-size: 0.9rem;">Código válido por 10 minutos</p>
+            </div>
+            
+            <p style="color: #666; line-height: 1.6; margin-bottom: 20px;">
+              Se você não solicitou esta recuperação, pode ignorar este email com segurança.
+            </p>
+            
+            <div style="border-top: 1px solid #eee; padding-top: 20px; text-align: center;">
+              <p style="color: #999; font-size: 0.8rem; margin: 0;">
+                AjudeX - Conectando pessoas através da troca de serviços
+              </p>
+            </div>
+          </div>
+        </div>
+      `,
+    };
+
+    // Enviar email
+    let emailSent = false;
+
+    if (process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL) {
+      try {
+        console.log(`🔄 Enviando email via SendGrid para ${email}...`);
+        const result = await sgMail.send(msg);
+        console.log(`✅ SendGrid response:`, result[0]);
+        console.log(`📧 Status Code:`, result[0]?.statusCode);
+        console.log(`📧 Headers:`, result[0]?.headers);
+        console.log(
+          `✅ Código enviado via SendGrid para ${email}: ${resetCode}`,
+        );
+        console.log(`🔑 Código para usar na interface: ${resetCode}`);
+        emailSent = true;
+      } catch (emailError) {
+        console.error("❌ Erro SendGrid detalhado:", {
+          message: emailError.message,
+          code: emailError.code,
+          status: emailError.response?.status,
+          body: emailError.response?.body,
+        });
+
+        if (emailError.code === 401) {
+          console.log("🔐 Problema de autenticação detectado");
+          console.log("📋 Verifique no SendGrid:");
+          console.log("   1. API Key está ativa e com permissões de Mail Send");
+          console.log("   2. Email remetente está verificado no SendGrid");
+          console.log("   3. Domínio de envio está autenticado (se aplicável)");
+        }
+      }
+    } else {
+      console.log("⚙️ Configuração SendGrid incompleta - usando simulação");
+    }
+
+    // Fallback: sempre mostrar código no console
+    if (!emailSent) {
+      console.log(`📧 [CÓDIGO DE TESTE] ${email}: ${resetCode}`);
+      console.log(
+        "ℹ️ Use este código na interface para testar a funcionalidade",
+      );
+    }
+
+    res.json({
+      success: true,
+      message: "Código de recuperação enviado! Verifique sua caixa de entrada.",
+    });
+  } catch (error) {
+    console.error("Erro geral:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao processar solicitação. Tente novamente.",
+    });
+  }
+});
+
+// Redefinir senha com código
+app.post("/api/reset-password", async (req, res) => {
+  const { email, code, newPassword } = req.body;
+
+  if (!email || !code || !newPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "Email, código e nova senha são obrigatórios",
+    });
+  }
+
+  // Validar senha
+  if (newPassword.length < 8) {
+    return res.status(400).json({
+      success: false,
+      message: "A nova senha deve ter pelo menos 8 caracteres",
+    });
+  }
+
+  const hasLetter = /[a-zA-Z]/.test(newPassword);
+  const hasNumber = /[0-9]/.test(newPassword);
+  const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(newPassword);
+
+  if (!hasLetter || !hasNumber || !hasSpecial) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "A nova senha deve conter letras, números e um caractere especial",
+    });
+  }
+
+  // Verificar código
+  const resetData = resetCodes.get(email);
+
+  if (!resetData) {
+    return res.status(400).json({
+      success: false,
+      message: "Código não encontrado. Solicite um novo código.",
+    });
+  }
+
+  if (Date.now() > resetData.expires) {
+    resetCodes.delete(email);
+    return res.status(400).json({
+      success: false,
+      message: "Código expirado. Solicite um novo código.",
+    });
+  }
+
+  if (resetData.attempts >= 3) {
+    resetCodes.delete(email);
+    return res.status(400).json({
+      success: false,
+      message: "Muitas tentativas. Solicite um novo código.",
+    });
+  }
+
+  if (resetData.code !== code) {
+    resetData.attempts++;
+    return res.status(400).json({
+      success: false,
+      message: "Código incorreto",
+    });
+  }
+
+  // Código válido - atualizar senha no banco PostgreSQL
+  try {
+    await databaseService.updateUserPassword(email, newPassword);
+
+    // Remover código da memória após sucesso
+    resetCodes.delete(email);
+    console.log(`🔑 Senha redefinida no PostgreSQL para ${email}`);
+
+    res.json({
+      success: true,
+      message: "Senha redefinida com sucesso! Faça login com sua nova senha.",
+    });
+  } catch (error) {
+    console.error("❌ Erro ao atualizar senha no banco:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao atualizar senha. Tente novamente.",
+    });
+  }
+});
+
+// Endpoint para criar Payment Intent do Stripe (pagamento único)
+app.post("/api/create-payment-intent", authenticateJWT, async (req, res) => {
+  console.log("🎯 Endpoint /api/create-payment-intent foi chamado");
+  try {
+    const { amount, currency = "brl" } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Valor inválido para pagamento",
+      });
+    }
+
+    console.log("🔍 req.user no create-payment-intent:", req.user);
+    const userId = req.user.userId; // Obter do token JWT
+    console.log("🔍 userId extraído:", userId);
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "Token de usuário inválido",
+      });
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100), // Converter para centavos
+      currency,
+      metadata: {
+        type: "premium_onetime",
+        userId: userId.toString(),
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    console.log(
+      "💳 Payment Intent criado:",
+      paymentIntent.id,
+      "para usuário:",
+      userId,
+      "Valor:",
+      amount,
+    );
+
+    res.json({
+      success: true,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+    });
+  } catch (error) {
+    console.error("❌ Erro ao criar Payment Intent:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Erro interno do servidor",
+    });
+  }
+});
+
+// Endpoint para verificar token JWT
+app.get("/api/verify-token", async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        success: false,
+        message: "Token de autorização necessário",
+      });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    // Encontrar usuário
+    const user = await databaseService.getUserById(decoded.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Usuário não encontrado",
+      });
+    }
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        photo: user.photo,
+        premium: user.premium,
+        servicesOffered: user.servicesOffered,
+        servicesWanted: user.servicesWanted,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Erro ao verificar token:", error.message);
+    res.status(401).json({
+      success: false,
+      message: "Token inválido",
+    });
+  }
+});
+
+// Endpoint para atualizar serviços do usuário
+app.put("/api/user/services", authenticateJWT, async (req, res) => {
+  try {
+    console.log("🔧 Iniciando atualização de serviços...");
+    console.log("📋 Dados recebidos:", req.body);
+    console.log("👤 Usuário autenticado:", req.user.userId);
+
+    const { servicesOffered, servicesWanted } = req.body;
+    const userId = req.user.userId;
+
+    // Buscar usuário no PostgreSQL
+    const currentUser = await databaseService.getUserById(userId);
+    if (!currentUser) {
+      console.log("❌ Usuário não encontrado no banco:", userId);
+      return res.status(404).json({
+        success: false,
+        message: "Usuário não encontrado",
+      });
+    }
+
+    console.log("👤 Usuário encontrado:", currentUser.name);
+
+    // Preparar dados para atualização
+    const updateData = {};
+    if (servicesOffered !== undefined) {
+      updateData.servicesOffered = servicesOffered;
+      console.log("✅ Serviços oferecidos para atualizar:", servicesOffered);
+    }
+    if (servicesWanted !== undefined) {
+      updateData.servicesWanted = servicesWanted;
+      console.log("✅ Serviços desejados para atualizar:", servicesWanted);
+    }
+
+    // Atualizar no PostgreSQL
+    console.log("💾 Salvando no PostgreSQL...");
+    const updatedUser = await databaseService.updateUser(userId, updateData);
+
+    console.log(
+      `✅ Serviços atualizados no banco para usuário ${updatedUser.name}:`,
+      {
+        oferecidos: updatedUser.servicesOffered?.length || 0,
+        desejados: updatedUser.servicesWanted?.length || 0,
+      },
+    );
+
+    res.json({
+      success: true,
+      message: "Serviços atualizados com sucesso",
+      user: {
+        id: updatedUser.id,
+        name: updatedUser.name,
+        servicesOffered: updatedUser.servicesOffered,
+        servicesWanted: updatedUser.servicesWanted,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Erro crítico ao atualizar serviços:", error);
+    console.error("❌ Stack trace:", error.stack);
+    res.status(500).json({
+      success: false,
+      message: "Erro interno do servidor",
+    });
+  }
+});
+
+// Endpoint removido - apenas pagamento único disponível
+// Assinatura mensal não é mais oferecida
+
+// Endpoint para verificar status da assinatura
+app.get("/api/subscription-status/:customerId", async (req, res) => {
+  try {
+    const { customerId } = req.params;
+
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "active",
+      limit: 1,
+    });
+
+    const hasActiveSubscription = subscriptions.data.length > 0;
+
+    res.json({
+      success: true,
+      hasActiveSubscription,
+      subscription: hasActiveSubscription ? subscriptions.data[0] : null,
+    });
+  } catch (error) {
+    console.error("❌ Erro ao verificar assinatura:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Erro interno do servidor",
+    });
+  }
+});
+
+// Endpoint para obter chave pública do Stripe
+app.get("/api/stripe-config", (req, res) => {
+  res.json({
+    publicKey: process.env.VITE_STRIPE_PUBLIC_KEY,
+  });
+});
+
+// Novos endpoints para Discovery tipo Tinder
+
+// Buscar usuários para Discovery com intersecção de serviços
+app.get("/api/discovery/:userId", async (req, res) => {
+  const currentUserId = parseInt(req.params.userId);
+  const currentUser = await databaseService.getUserById(currentUserId);
+
+  if (!currentUser) {
+    return res.status(404).json({ error: "Usuário não encontrado" });
+  }
+
+  // Verificar se o usuário atual tem premium expirado
+  if (currentUser.premium && currentUser.premiumExpiryDate) {
+    const now = new Date();
+    const expiryDate = new Date(currentUser.premiumExpiryDate);
+    if (now > expiryDate) {
+      // Premium expirou - atualizar automaticamente no PostgreSQL
+      await databaseService.updateUser(currentUserId, {
+        premium: false,
+        premiumExpiryDate: null,
+        searchRadius: 30,
+      });
+      currentUser.premium = false;
+      currentUser.searchRadius = 30;
+      console.log(
+        `⏰ Premium expirado automaticamente para usuário ${currentUserId}`,
+      );
+    }
+  }
+
+  // Buscar todos os usuários do PostgreSQL
+  const allUsers = await databaseService.getAllUsers();
+
+  // Buscar matches existentes do usuário atual
+  const existingMatches = await databaseService.getUserMatches(currentUserId);
+  const matchedUserIds = existingMatches.map((match) =>
+    match.user1Id === currentUserId ? match.user2Id : match.user1Id,
+  );
+
+  console.log(
+    `🔍 Usuário ${currentUserId} tem ${matchedUserIds.length} matches existentes: [${matchedUserIds.join(", ")}]`,
+  );
+
+  // Filtrar usuários com intersecção de serviços e respeitar lógica de swipes
+  const candidates = await Promise.all(
+    allUsers
+      .filter((user) => user.id !== currentUserId)
+      .map(async (user) => {
+        // ❌ FILTRO 1: Excluir usuários que já fizeram match
+        if (matchedUserIds.includes(user.id)) {
+          console.log(
+            `🚫 Usuário ${user.id} (${user.name}) filtrado - já tem match com usuário atual`,
+          );
+          return null;
+        }
+
+        // ❌ FILTRO 2: Verificar se já deu swipe neste usuário
+        const hasSwipedBefore = await databaseService.hasUserSwiped(
+          currentUserId,
+          user.id,
+        );
+
+        if (hasSwipedBefore) {
+          // Verificar se deve reaparecer (ambos alteraram serviços OU passou tempo suficiente)
+          const shouldReappear =
+            await databaseService.shouldReappearInDiscovery(
+              currentUserId,
+              user.id,
+            );
+          if (!shouldReappear) {
+            console.log(
+              `🚫 Usuário ${user.id} (${user.name}) filtrado - já visualizado e não deve reaparecer`,
+            );
+            return null; // Não deve reaparecer
+          }
+        }
+
+        // ✅ FILTRO 3: Verificação segura de arrays
+        const myOfferedArray = Array.isArray(currentUser.servicesOffered)
+          ? currentUser.servicesOffered
+          : [];
+        const myWantedArray = Array.isArray(currentUser.servicesWanted)
+          ? currentUser.servicesWanted
+          : [];
+        const theirOfferedArray = Array.isArray(user.servicesOffered)
+          ? user.servicesOffered
+          : [];
+        const theirWantedArray = Array.isArray(user.servicesWanted)
+          ? user.servicesWanted
+          : [];
+
+        // ✅ FILTRO 4: Verificar intersecção BIDIRECIONAL: eu ofereço o que ele quer E ele oferece o que eu quero
+        const myOfferedHisWanted = myOfferedArray.some((s) =>
+          theirWantedArray.includes(s),
+        );
+        const hisOfferedMyWanted = theirOfferedArray.some((s) =>
+          myWantedArray.includes(s),
+        );
+
+        // LÓGICA: Se pelo menos um serviço que EU busco está no que ELE oferece
+        // E pelo menos um serviço que ELE busca está no que EU ofereço (intersecção bidirecional)
+        if (myOfferedHisWanted && hisOfferedMyWanted) {
+          return user;
+        }
+
+        console.log(
+          `🚫 Usuário ${user.id} (${user.name}) filtrado - sem intersecção bidirecional de serviços`,
+        );
+        return null;
+      }),
+  );
+
+  // Filtrar nulls e processar candidatos válidos com cálculo real de distância
+  const processedCandidates = [];
+
+  for (const user of candidates.filter((u) => u !== null)) {
+    // Calcular distância real entre os usuários usando CEP
+    const distanceResult = await databaseService.calculateMutualDistance(
+      currentUser,
+      user,
+    );
+
+    // Só incluir se estiver dentro do raio mútuo de busca
+    if (distanceResult.withinRange) {
+      // Gerar URL da foto se existir
+      const profilePhotoUrl = user.photo ? `/api/photo/${user.photo}` : null;
+
+      processedCandidates.push({
+        id: user.id,
+        name: user.name,
+        photo: profilePhotoUrl,
+        premium: user.premium,
+        servicesOffered: user.servicesOffered,
+        servicesWanted: user.servicesWanted,
+        distance: distanceResult.distance,
+        servicesIntersection: {
+          iOffer:
+            currentUser.servicesOffered?.filter((s) =>
+              user.servicesWanted?.includes(s),
+            ) || [],
+          theyOffer:
+            user.servicesOffered?.filter((s) =>
+              currentUser.servicesWanted?.includes(s),
+            ) || [],
+        },
+      });
+    }
+  }
+
+  const validCandidates = processedCandidates;
+
+  // Ordenar: Premium primeiro, depois por distância
+  validCandidates.sort((a, b) => {
+    if (a.premium !== b.premium) {
+      return b.premium ? 1 : -1; // Premium primeiro
+    }
+    return a.distance - b.distance; // Menor distância primeiro
+  });
+
+  console.log(
+    `🔍 Discovery para usuário ${currentUserId}: ${validCandidates.length} candidatos encontrados`,
+  );
+  console.log(
+    `📊 Filtros aplicados: ${matchedUserIds.length} matches existentes, ${allUsers.length - 1} usuários total disponíveis`,
+  );
+
+  res.json({
+    success: true,
+    users: validCandidates.slice(0, 10), // Máximo 10 por vez
+    total: validCandidates.length,
+  });
+});
+
+// Curtir usuário - MIGRADO PARA POSTGRESQL
+app.post("/api/like", async (req, res) => {
+  const { userId, targetUserId } = req.body;
+
+  if (!userId || !targetUserId) {
+    return res
+      .status(400)
+      .json({ error: "userId e targetUserId são obrigatórios" });
+  }
+
+  try {
+    // Registrar like no PostgreSQL
+    await databaseService.createLike(parseInt(userId), parseInt(targetUserId));
+
+    // Verificar se houve match (ambos curtiram) usando PostgreSQL
+    const isMutualLike = await databaseService.checkMutualLike(
+      parseInt(userId),
+      parseInt(targetUserId),
+    );
+    let isMatch = false;
+
+    if (isMutualLike) {
+      // Criar match no PostgreSQL
+      try {
+        await databaseService.createMatch(
+          parseInt(userId),
+          parseInt(targetUserId),
+        );
+        isMatch = true;
+        console.log(`💖 MATCH criado: ${userId} ↔ ${targetUserId}`);
+      } catch (matchError) {
+        console.log("Match já existe ou erro ao criar");
+      }
+    }
+
+    console.log(
+      `👍 Like: ${userId} → ${targetUserId}${isMatch ? " (MATCH!)" : ""}`,
+    );
+
+    res.json({
+      success: true,
+      liked: true,
+      match: isMatch,
+    });
+  } catch (error) {
+    console.error("Erro ao processar like:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// Rejeitar usuário (passar) - MIGRADO PARA POSTGRESQL
+app.post("/api/pass", async (req, res) => {
+  const { userId, targetUserId } = req.body;
+
+  if (!userId || !targetUserId) {
+    return res
+      .status(400)
+      .json({ error: "userId e targetUserId são obrigatórios" });
+  }
+
+  try {
+    // Salvar pass no PostgreSQL
+    await databaseService.createPass(parseInt(userId), parseInt(targetUserId));
+
+    console.log(`👎 Pass: ${userId} → ${targetUserId}`);
+
+    res.json({
+      success: true,
+      passed: true,
+    });
+  } catch (error) {
+    console.error("Erro ao processar pass:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// Listar matches do usuário - MIGRADO PARA POSTGRESQL
+app.get("/api/matches/:userId", async (req, res) => {
+  const userId = parseInt(req.params.userId);
+
+  try {
+    const userMatches = await databaseService.getUserMatches(userId);
+
+    const matchesWithUsers = await Promise.all(
+      userMatches.map(async (match) => {
+        const otherUserId =
+          match.user1Id === userId ? match.user2Id : match.user1Id;
+        const otherUser = await databaseService.getUserById(otherUserId);
+
+        // Gerar URL da foto se existir
+        const profilePhotoUrl = otherUser?.photo
+          ? `/api/photo/${otherUser.photo}`
+          : null;
+
+        return {
+          matchId: match.id,
+          user: {
+            id: otherUser.id,
+            name: otherUser.name,
+            photo: profilePhotoUrl,
+            premium: otherUser.premium,
+            servicesOffered: otherUser.servicesOffered,
+            servicesWanted: otherUser.servicesWanted,
+          },
+          timestamp: match.createdAt,
+        };
+      }),
+    );
+
+    res.json({
+      success: true,
+      matches: matchesWithUsers,
+    });
+  } catch (error) {
+    console.error("Erro ao buscar matches:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// Endpoints do Chat - persistência de mensagens
+
+// Buscar mensagens de um match - MIGRADO PARA POSTGRESQL com limite de 100 mensagens
+app.get("/api/messages/:matchId", authenticateJWT, async (req, res) => {
+  const matchId = parseInt(req.params.matchId);
+  const limit = parseInt(req.query.limit) || 100; // Padrão: 100 mensagens
+
+  try {
+    console.log(
+      `💬 Buscando mensagens para match ${matchId} (limit: ${limit})`,
+    );
+
+    // Buscar mensagens do match no PostgreSQL com limite especificado
+    const matchMessages = await databaseService.getMatchMessages(
+      matchId,
+      limit,
+    );
+    console.log(
+      `💬 Match ${matchId}: retornando ${matchMessages.length} mensagens do histórico completo`,
+    );
+
+    // Adicionar informações do remetente para cada mensagem
+    const messagesWithSender = await Promise.all(
+      matchMessages.map(async (msg) => {
+        const sender = await databaseService.getUserById(msg.senderId);
+        return {
+          id: msg.id,
+          content: msg.content,
+          timestamp: msg.createdAt,
+          senderId: msg.senderId, // Campo essencial para o frontend identificar quem enviou
+          sender: {
+            id: sender?.id,
+            name: sender?.name,
+            photo: sender?.photo ? `/api/photo/${sender.photo}` : null,
+          },
+        };
+      }),
+    );
+
+    // Log para debug do cache
+    if (messagesWithSender.length > 0) {
+      console.log(
+        `📊 Histórico completo: ${messagesWithSender.length} mensagens`,
+      );
+      console.log(
+        `📅 Primeira mensagem: ${new Date(messagesWithSender[0].timestamp).toLocaleString()}`,
+      );
+      console.log(
+        `📅 Última mensagem: ${new Date(messagesWithSender[messagesWithSender.length - 1].timestamp).toLocaleString()}`,
+      );
+    }
+
+    res.json({
+      success: true,
+      messages: messagesWithSender,
+      count: messagesWithSender.length,
+      limit: limit,
+    });
+  } catch (error) {
+    console.error("❌ Erro ao buscar mensagens:", error);
+    res.status(500).json({
+      success: false,
+      error: "Erro interno do servidor",
+      message: "Não foi possível carregar o histórico de mensagens",
+    });
+  }
+});
+
+// Enviar mensagem - MIGRADO PARA POSTGRESQL
+app.post("/api/messages", async (req, res) => {
+  const { matchId, senderId, content } = req.body;
+
+  if (!matchId || !senderId || !content) {
+    return res.status(400).json({
+      error: "matchId, senderId e content são obrigatórios",
+    });
+  }
+
+  try {
+    // Criar nova mensagem no PostgreSQL
+    const newMessage = await databaseService.createMessage(
+      parseInt(matchId),
+      parseInt(senderId),
+      content.trim(),
+    );
+
+    // Buscar dados do sender para resposta
+    const sender = await databaseService.getUserById(parseInt(senderId));
+
+    res.json({
+      success: true,
+      message: {
+        id: newMessage.id,
+        content: newMessage.content,
+        timestamp: newMessage.createdAt,
+        senderId: newMessage.senderId, // Adicionar senderId para compatibilidade frontend
+        sender: {
+          id: sender?.id,
+          name: sender?.name,
+          photo: sender?.photo ? `/api/photo/${sender.photo}` : null,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Erro ao enviar mensagem:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// Endpoint para confirmar pagamento e ativar premium
+app.post("/api/confirm-payment", async (req, res) => {
+  try {
+    const { paymentIntentId, userId } = req.body;
+
+    if (!paymentIntentId || !userId) {
+      return res.status(400).json({
+        success: false,
+        message: "PaymentIntent ID e User ID são obrigatórios",
+      });
+    }
+
+    // Verificar o status do pagamento no Stripe
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (paymentIntent.status !== "succeeded") {
+      return res.status(400).json({
+        success: false,
+        message: "Pagamento não foi processado com sucesso",
+      });
+    }
+
+    // Verificar se o userId no metadata corresponde
+    if (paymentIntent.metadata.userId !== userId.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: "Usuário não autorizado para este pagamento",
+      });
+    }
+
+    // Buscar usuário no PostgreSQL
+    const user = await databaseService.getUserById(parseInt(userId));
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Usuário não encontrado",
+      });
+    }
+
+    // Calcular data de expiração (30 dias a partir de agora)
+    const premiumExpiresAt = new Date();
+    premiumExpiresAt.setDate(premiumExpiresAt.getDate() + 30);
+
+    // Atualizar usuário no PostgreSQL
+    await databaseService.updateUser(parseInt(userId), {
+      premium: true,
+      premiumExpiryDate: premiumExpiresAt,
+      searchRadius: 100,
+    });
+
+    console.log(
+      `✅ Premium ativado para usuário ${userId} até ${premiumExpiresAt.toLocaleDateString("pt-BR")}`,
+    );
+
+    res.json({
+      success: true,
+      message: "Premium ativado com sucesso!",
+      premiumExpiresAt: premiumExpiresAt.toISOString(),
+      searchRadius: 100,
+    });
+  } catch (error) {
+    console.error("❌ Erro ao confirmar pagamento:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Erro interno do servidor",
+    });
+  }
+});
+
+// Função para verificar e expirar premiums automaticamente - MIGRADO PARA POSTGRESQL
+async function checkPremiumExpiry() {
+  try {
+    const now = new Date();
+    let expiredCount = 0;
+
+    const allUsers = await databaseService.getAllUsers();
+
+    for (const user of allUsers) {
+      if (user.premium && user.premiumExpiryDate) {
+        const expiryDate = new Date(user.premiumExpiryDate);
+        if (now > expiryDate) {
+          // Premium expirou - reverter para conta normal no PostgreSQL
+          await databaseService.updateUser(user.id, {
+            premium: false,
+            premiumExpiryDate: null,
+            searchRadius: 30,
+          });
+          expiredCount++;
+          console.log(
+            `⏰ Premium expirado para usuário ${user.id} (${user.name})`,
+          );
+        }
+      }
+    }
+
+    if (expiredCount > 0) {
+      console.log(`📊 ${expiredCount} premium(s) expirado(s) automaticamente`);
+    }
+  } catch (error) {
+    console.error("Erro ao verificar expiração de premiums:", error);
+  }
+}
+
+// Verificar expiração a cada hora (3600000 ms)
+setInterval(checkPremiumExpiry, 3600000);
+
+// Endpoint para verificar status premium de um usuário - MIGRADO PARA POSTGRESQL
+app.get("/api/premium-status/:userId", async (req, res) => {
+  const userId = parseInt(req.params.userId);
+
+  try {
+    const user = await databaseService.getUserById(userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Usuário não encontrado",
+      });
+    }
+
+    // Verificar se o premium expirou
+    if (user.premium && user.premiumExpiryDate) {
+      const now = new Date();
+      const expiryDate = new Date(user.premiumExpiryDate);
+
+      if (now > expiryDate) {
+        // Premium expirou - atualizar no PostgreSQL
+        await databaseService.updateUser(userId, {
+          premium: false,
+          premiumExpiryDate: null,
+          searchRadius: 30,
+        });
+
+        res.json({
+          success: true,
+          premium: false,
+          expired: true,
+          message: "Premium expirado",
+        });
+        return;
+      }
+    }
+
+    res.json({
+      success: true,
+      premium: user.premium || false,
+      premiumExpiryDate: user.premiumExpiryDate,
+      searchRadius: user.searchRadius || 30,
+      expired: false,
+    });
+  } catch (error) {
+    console.error("Erro ao verificar status premium:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro interno do servidor",
+    });
+  }
+});
+
+// Endpoint para denunciar usuário - MIGRADO PARA POSTGRESQL
+app.post("/api/report", async (req, res) => {
+  try {
+    const { reporterId, reportedUserId, reason } = req.body;
+
+    if (!reporterId || !reportedUserId || !reason) {
+      return res.status(400).json({
+        success: false,
+        message: "Todos os campos são obrigatórios",
+      });
+    }
+
+    // Verificar se os usuários existem no PostgreSQL
+    const reporter = await databaseService.getUserById(parseInt(reporterId));
+    const reported = await databaseService.getUserById(
+      parseInt(reportedUserId),
+    );
+
+    if (!reporter || !reported) {
+      return res.status(404).json({
+        success: false,
+        message: "Usuário não encontrado",
+      });
+    }
+
+    // Criar nova denúncia no PostgreSQL
+    const newReport = await databaseService.createReport(
+      parseInt(reporterId),
+      parseInt(reportedUserId),
+      reason.trim(),
+    );
+
+    console.log("⚠️ Nova denúncia registrada:", newReport);
+
+    res.json({
+      success: true,
+      message: "Denúncia registrada com sucesso",
+    });
+  } catch (error) {
+    console.error("❌ Erro ao registrar denúncia:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Erro interno do servidor",
+    });
+  }
+});
+
+// Endpoint para listar denúncias (admin) - MIGRADO PARA POSTGRESQL
+app.get("/api/reports", async (req, res) => {
+  try {
+    const allReports = await databaseService.getAllReports();
+
+    const reportsWithUserData = await Promise.all(
+      allReports.map(async (report) => {
+        const reporter = await databaseService.getUserById(report.reporterId);
+        const reported = await databaseService.getUserById(
+          report.reportedUserId,
+        );
+
+        return {
+          ...report,
+          reporter: {
+            id: reporter?.id,
+            name: reporter?.name,
+            email: reporter?.email,
+          },
+          reported: {
+            id: reported?.id,
+            name: reported?.name,
+            email: reported?.email,
+          },
+        };
+      }),
+    );
+
+    res.json({
+      success: true,
+      reports: reportsWithUserData,
+      total: allReports.length,
+    });
+  } catch (error) {
+    console.error("Erro ao buscar denúncias:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// Endpoint para enviar sugestões
+app.post("/api/suggestions", async (req, res) => {
+  try {
+    const { userId, suggestion } = req.body;
+
+    // Validar dados
+    if (!userId || !suggestion) {
+      return res.status(400).json({
+        success: false,
+        message: "userId e suggestion são obrigatórios",
+      });
+    }
+
+    // Validar tamanho da sugestão (máximo 300 caracteres)
+    if (suggestion.length > 300) {
+      return res.status(400).json({
+        success: false,
+        message: "Sugestão deve ter no máximo 300 caracteres",
+      });
+    }
+
+    // Encontrar usuário no PostgreSQL para obter email
+    const user = await databaseService.getUserById(parseInt(userId));
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Usuário não encontrado",
+      });
+    }
+
+    // Criar nova sugestão no PostgreSQL
+    const newSuggestion = await databaseService.createSuggestion(
+      parseInt(userId),
+      user.email,
+      user.name,
+      suggestion.trim(),
+    );
+
+    console.log("💡 Nova sugestão recebida:", {
+      id: newSuggestion.id,
+      user: user.name,
+      email: user.email,
+      suggestion:
+        suggestion.substring(0, 50) + (suggestion.length > 50 ? "..." : ""),
+    });
+
+    res.json({
+      success: true,
+      message: "Sugestão enviada com sucesso!",
+      suggestionId: newSuggestion.id,
+    });
+  } catch (error) {
+    console.error("❌ Erro ao salvar sugestão:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro interno do servidor",
+    });
+  }
+});
+
+// Endpoint para listar sugestões (para administradores) - MIGRADO PARA POSTGRESQL
+app.get("/api/suggestions", async (req, res) => {
+  try {
+    // Buscar sugestões do PostgreSQL
+    const allSuggestions = await databaseService.getAllSuggestions();
+
+    const sortedSuggestions = allSuggestions.map((s) => ({
+      id: s.id,
+      userEmail: s.userEmail,
+      userName: s.userName,
+      suggestion: s.suggestion,
+      timestamp: s.createdAt,
+      date: new Date(s.createdAt).toLocaleDateString("pt-BR"),
+    }));
+
+    res.json({
+      success: true,
+      suggestions: sortedSuggestions,
+      total: allSuggestions.length,
+    });
+  } catch (error) {
+    console.error("❌ Erro ao buscar sugestões:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro interno do servidor",
+    });
+  }
+});
+
+// Endpoint de debug para usuários (removido em produção) - MIGRADO PARA POSTGRESQL
+app.get("/api/debug-users", async (req, res) => {
+  try {
+    const allUsers = await databaseService.getAllUsers();
+
+    res.json({
+      success: true,
+      totalUsers: allUsers.length,
+      users: allUsers.map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        cep: u.cep,
+        servicesOffered: u.servicesOffered,
+        servicesWanted: u.servicesWanted,
+        premium: u.premium,
+      })),
+    });
+  } catch (error) {
+    console.error("Erro ao buscar usuários:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// Estatísticas para debug - MIGRADO PARA POSTGRESQL
+app.get("/api/stats", async (req, res) => {
+  try {
+    // Verificar expiração antes de retornar stats
+    await checkPremiumExpiry();
+
+    const allUsers = await databaseService.getAllUsers();
+    const allLikes = await databaseService.getAllLikes();
+    const allMatches = await databaseService.getAllMatches();
+    const allMessages = await databaseService.getAllMessages();
+    const allReports = await databaseService.getAllReports();
+    const allSuggestions = await databaseService.getAllSuggestions();
+
+    const premiumUsers = allUsers.filter((u) => u.premium).length;
+    const expiredPremiums = allUsers.filter(
+      (u) => u.premiumExpiryDate && new Date() > new Date(u.premiumExpiryDate),
+    ).length;
+
+    res.json({
+      users: allUsers.length,
+      likes: allLikes.length,
+      matches: allMatches.length,
+      messages: allMessages.length,
+      reports: allReports.length,
+      suggestions: allSuggestions.length,
+      premiumUsers: premiumUsers,
+      expiredPremiums: expiredPremiums,
+      lastUpdate: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("Erro ao buscar estatísticas:", error);
+    res.status(500).json({ error: "Erro interno do servidor" });
+  }
+});
+
+// Endpoint para limpar dados do PostgreSQL (para desenvolvimento)
+app.post("/api/clear-matches", async (req, res) => {
+  try {
+    const beforeMatches = await databaseService.getAllMatches();
+    const beforeMessages = await databaseService.getAllMessages();
+    const beforeLikes = await databaseService.getAllLikes();
+
+    // Limpar dados do PostgreSQL
+    await databaseService.clearAllMatches();
+    await databaseService.clearAllMessages();
+    await databaseService.clearAllLikes();
+
+    console.log("🧹 Dados PostgreSQL limpos:", {
+      matchesRemovidos: beforeMatches.length,
+      mensagensRemovidas: beforeMessages.length,
+      likesRemovidos: beforeLikes.length,
+    });
+
+    res.json({
+      success: true,
+      message: "Dados PostgreSQL removidos com sucesso",
+      removed: {
+        matches: beforeMatches.length,
+        messages: beforeMessages.length,
+        likes: beforeLikes.length,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Erro ao limpar dados:", error);
+    res.status(500).json({
+      success: false,
+      message: "Erro ao limpar dados",
+    });
+  }
+});
+
+// Inicializar servidor
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 AjudeX Development Server`);
+  console.log(`📱 URL: http://localhost:${PORT}`);
+  console.log(`🔧 Health: http://localhost:${PORT}/api/health`);
+  console.log(`📊 Stats: http://localhost:${PORT}/api/stats`);
+  console.log(`💾 Persistência: PostgreSQL (migração completa!)`);
+});

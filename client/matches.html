@@ -1,0 +1,710 @@
+<!doctype html>
+<html lang="pt-BR">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>AjudeX - Matches</title>
+        <link
+            href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+            rel="stylesheet"
+        />
+        <script src="auth-utils.js"></script>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+                background: linear-gradient(
+                    135deg,
+                    #c8a2c8 0%,
+                    #dda0dd 25%,
+                    #dda0dd 50%,
+                    #48cae4 75%,
+                    #00b4d8 100%
+                );
+                min-height: 100vh;
+                padding-bottom: 80px;
+            }
+
+            .header {
+                background: rgba(255, 255, 255, 0.95);
+                padding: 15px 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                position: sticky;
+                top: 0;
+                z-index: 1000;
+            }
+
+            .logo {
+                background: linear-gradient(135deg, #c8a2c8, #48cae4, #00b4d8);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                font-size: 1.4rem;
+                font-weight: bold;
+            }
+
+            .matches-counter {
+                color: #c8a2c8;
+                font-weight: bold;
+            }
+
+            .matches-container {
+                max-width: 400px;
+                margin: 20px auto;
+                padding: 0 20px;
+            }
+
+            .section-title {
+                background: rgba(255, 255, 255, 0.95);
+                border-radius: 15px;
+                padding: 20px;
+                margin-bottom: 20px;
+                text-align: center;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            }
+
+            .section-title h2 {
+                color: #333;
+                margin-bottom: 10px;
+            }
+
+            .section-title p {
+                color: #666;
+            }
+
+            .matches-list {
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .match-item {
+                background: rgba(255, 255, 255, 0.95);
+                border-radius: 15px;
+                padding: 20px;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+                cursor: pointer;
+                transition: all 0.3s;
+                display: flex;
+                align-items: center;
+                gap: 15px;
+            }
+
+            .match-item:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            }
+
+            .match-photo {
+                width: 60px;
+                height: 60px;
+                background: linear-gradient(135deg, #ff9a9e, #fecfef, #9bb5ff);
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-size: 1.5rem;
+                flex-shrink: 0;
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+            }
+
+            .match-photo.has-photo {
+                color: transparent;
+            }
+
+            .match-photo.no-photo {
+                background: linear-gradient(135deg, #ff9a9e, #fecfef, #9bb5ff);
+            }
+
+            .match-info {
+                flex: 1;
+            }
+
+            .match-name {
+                font-size: 1.2rem;
+                font-weight: bold;
+                color: #333;
+                margin-bottom: 5px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .premium-badge {
+                background: linear-gradient(135deg, #ffd700, #ffed4e);
+                color: #333;
+                padding: 2px 6px;
+                border-radius: 8px;
+                font-size: 0.7rem;
+                font-weight: bold;
+            }
+
+            .match-services {
+                color: #666;
+                font-size: 0.9rem;
+                margin-bottom: 8px;
+            }
+
+            .match-status {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 0.8rem;
+            }
+
+            .match-time {
+                color: #999;
+            }
+
+            .unread-indicator {
+                width: 12px;
+                height: 12px;
+                background: #ff9a9e;
+                border-radius: 50%;
+                flex-shrink: 0;
+            }
+
+            .new-match {
+                border: 2px solid #51cf66;
+                background: linear-gradient(
+                    135deg,
+                    rgba(81, 207, 102, 0.1),
+                    rgba(255, 255, 255, 0.95)
+                );
+            }
+
+            .new-match-badge {
+                background: #51cf66;
+                color: white;
+                padding: 2px 6px;
+                border-radius: 8px;
+                font-size: 0.7rem;
+                font-weight: bold;
+            }
+
+            .empty-state {
+                background: rgba(255, 255, 255, 0.95);
+                border-radius: 15px;
+                padding: 40px;
+                text-align: center;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            }
+
+            .empty-state i {
+                font-size: 4rem;
+                color: #ddd;
+                margin-bottom: 20px;
+            }
+
+            .empty-state h3 {
+                color: #666;
+                margin-bottom: 15px;
+            }
+
+            .empty-state p {
+                color: #999;
+                margin-bottom: 25px;
+            }
+
+            .btn {
+                padding: 12px 25px;
+                border: none;
+                border-radius: 10px;
+                font-weight: bold;
+                cursor: pointer;
+                transition: all 0.3s;
+                text-decoration: none;
+                display: inline-block;
+            }
+
+            .btn-primary {
+                background: linear-gradient(135deg, #ff9a9e, #9bb5ff);
+                color: white;
+            }
+
+            .btn-primary:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(255, 154, 158, 0.4);
+            }
+
+            .bottom-nav {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: rgba(255, 255, 255, 0.98);
+                display: flex;
+                justify-content: space-around;
+                padding: 12px 0 env(safe-area-inset-bottom, 12px);
+                box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+                backdrop-filter: blur(10px);
+                border-top: 1px solid rgba(0, 0, 0, 0.05);
+                z-index: 1000;
+            }
+
+            .nav-btn {
+                background: none;
+                border: none;
+                color: #666;
+                cursor: pointer;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 4px;
+                font-size: 0.75rem;
+                transition: all 0.3s;
+                padding: 8px 12px;
+                border-radius: 8px;
+                min-width: 60px;
+            }
+
+            .nav-btn.active {
+                color: #ff9a9e;
+                background: rgba(255, 154, 158, 0.1);
+            }
+
+            .nav-btn:hover {
+                background: rgba(255, 154, 158, 0.05);
+            }
+
+            .nav-btn i {
+                font-size: 1.3rem;
+            }
+
+            /* Mobile adjustments */
+            @media (max-width: 768px) {
+                .header {
+                    padding: 12px 15px;
+                }
+
+                .logo {
+                    font-size: 1.2rem;
+                }
+
+                .matches-counter {
+                    font-size: 0.9rem;
+                }
+
+                .matches-container {
+                    padding: 0 15px;
+                    padding-bottom: 100px;
+                }
+
+                .match-item {
+                    padding: 15px;
+                }
+            }
+
+            @media (max-width: 480px) {
+                .nav-btn {
+                    font-size: 0.7rem;
+                    gap: 3px;
+                    padding: 6px 8px;
+                    min-width: 50px;
+                }
+
+                .nav-btn i {
+                    font-size: 1.1rem;
+                }
+            }
+
+            .loading {
+                text-align: center;
+                background: rgba(255, 255, 255, 0.95);
+                border-radius: 15px;
+                padding: 30px;
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            }
+
+            .spinner {
+                width: 50px;
+                height: 50px;
+                margin: 0 auto 20px;
+                border: 4px solid #f3f3f3;
+                border-top: 4px solid #ff9a9e;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+
+            @keyframes spin {
+                0% {
+                    transform: rotate(0deg);
+                }
+                100% {
+                    transform: rotate(360deg);
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="logo">AjudeX</div>
+            <div class="matches-counter">
+                <i class="fas fa-handshake"></i>
+                <span id="matchCount">0</span> matches
+            </div>
+        </div>
+
+        <div class="matches-container">
+            <div class="section-title">
+                <h2>
+                    <i class="fas fa-handshake" style="color: #ff9a9e"></i> Seus
+                    Matches
+                </h2>
+                <p>Agora vocês podem combinar os serviços!</p>
+            </div>
+
+            <div id="matchesList" class="matches-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Carregando seus matches...</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bottom-nav">
+            <button class="nav-btn" onclick="goToPage('discovery')">
+                <i class="fas fa-search"></i>
+                Descobrir
+            </button>
+            <button class="nav-btn active" onclick="goToPage('matches')">
+                <i class="fas fa-heart"></i>
+                Matches
+            </button>
+            <button class="nav-btn" onclick="goToPage('chat')">
+                <i class="fas fa-comments"></i>
+                Chat
+            </button>
+            <button class="nav-btn" onclick="goToPage('profile')">
+                <i class="fas fa-user"></i>
+                Perfil
+            </button>
+        </div>
+
+        <script>
+            let currentUser = null;
+            let matches = [];
+
+            // Inicialização da página - verificar autenticação
+            window.addEventListener("DOMContentLoaded", async () => {
+                console.log("🔄 Inicializando página Matches...");
+
+                // Verificar e inicializar autenticação
+                currentUser = await initAuth(true);
+
+                if (currentUser) {
+                    // Atualizar interface com dados do usuário
+                    updateUserDisplay(currentUser);
+                    console.log(
+                        "✅ Usuário autenticado na página Matches:",
+                        currentUser.name,
+                    );
+
+                    // Carregar dados da página
+                    loadMatches();
+                }
+            });
+
+            // Carregar matches
+            async function loadMatches() {
+                try {
+                    console.log(
+                        `🔄 Buscando matches para usuário ${currentUser.id}...`,
+                    );
+
+                    const response = await fetch(
+                        `/api/matches/${currentUser.id}`,
+                    );
+                    const data = await response.json();
+
+                    if (data.success) {
+                        console.log(
+                            `✅ ${data.matches.length} matches encontrados`,
+                        );
+
+                        // Filtrar matches duplicados por ID de usuário, mantendo o mais recente
+                        const uniqueMatches = [];
+                        const seenUserIds = new Set();
+
+                        // Ordenar por timestamp (mais recente primeiro)
+                        const sortedMatches = data.matches.sort(
+                            (a, b) =>
+                                new Date(b.timestamp) - new Date(a.timestamp),
+                        );
+
+                        // Filtrar duplicatas
+                        for (const match of sortedMatches) {
+                            if (!seenUserIds.has(match.user.id)) {
+                                seenUserIds.add(match.user.id);
+                                uniqueMatches.push({
+                                    id: match.matchId,
+                                    matchId: match.matchId,
+                                    name: match.user.name,
+                                    premium: match.user.premium,
+                                    services: getServiceNames(
+                                        match.user.servicesOffered ||
+                                            match.user.offeredServices,
+                                    ),
+                                    matchTime: formatMatchTime(match.timestamp),
+                                    hasUnreadMessages: false,
+                                    isNew: isNewMatch(match.timestamp),
+                                    photo: match.user.photo,
+                                    userId: match.user.id,
+                                });
+                            }
+                        }
+
+                        matches = uniqueMatches;
+                        displayMatches();
+                    } else {
+                        console.error("❌ Erro na resposta:", data.message);
+                        showEmptyState();
+                    }
+                } catch (error) {
+                    console.error("❌ Erro ao carregar matches:", error);
+                    showEmptyState();
+                }
+            }
+
+            // Exibir matches
+            function displayMatches() {
+                const matchesList = document.getElementById("matchesList");
+                const matchCount = document.getElementById("matchCount");
+
+                matchCount.textContent = matches.length;
+
+                if (matches.length === 0) {
+                    showEmptyState();
+                    return;
+                }
+
+                matchesList.innerHTML = matches
+                    .map((match) => {
+                        const hasPhoto =
+                            match.photo && match.photo.trim() !== "";
+                        const photoStyle = hasPhoto
+                            ? `background-image: url('${match.photo}')`
+                            : "";
+                        const photoClass = hasPhoto ? "has-photo" : "no-photo";
+
+                        return `
+                <div class="match-item ${match.isNew ? "new-match" : ""}" onclick="openChat(${match.matchId})">
+                    <div class="match-photo ${photoClass}" style="${photoStyle}">
+                        ${hasPhoto ? "" : '<i class="fas fa-user"></i>'}
+                    </div>
+                    <div class="match-info">
+                        <div class="match-name">
+                            ${match.name}
+                            ${match.premium ? '<span class="premium-badge"><i class="fas fa-crown"></i> Premium</span>' : ""}
+                            ${match.isNew ? '<span class="new-match-badge">Novo!</span>' : ""}
+                        </div>
+                        <div class="match-services">
+                            <i class="fas fa-tools"></i> ${match.services.join(", ")}
+                        </div>
+                        <div class="match-status">
+                            <span class="match-time">
+                                <i class="fas fa-clock"></i> ${match.matchTime}
+                            </span>
+                            ${match.hasUnreadMessages ? '<div class="unread-indicator"></div>' : ""}
+                        </div>
+                    </div>
+                </div>
+                `;
+                    })
+                    .join("");
+            }
+
+            // Mostrar estado vazio
+            function showEmptyState() {
+                document.getElementById("matchesList").innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-heart-broken"></i>
+                    <h3>Ainda não há matches</h3>
+                    <p>Continue curtindo perfis na aba Descobrir para encontrar pessoas interessadas nos mesmos serviços que você!</p>
+                    <a href="/discovery-new.html" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Descobrir Pessoas
+                    </a>
+                </div>
+            `;
+            }
+
+            // Abrir chat com match
+            function openChat(matchId) {
+                // Marcar match como não-novo
+                const match = matches.find((m) => m.id === matchId);
+                if (match) {
+                    match.isNew = false;
+                    displayMatches();
+                }
+
+                // Ir para o chat
+                window.location.href = `/chat?match=${matchId}`;
+            }
+
+            // Navegação
+            function goToPage(page) {
+                switch (page) {
+                    case "discovery":
+                        window.location.href = "/discovery-new.html";
+                        break;
+                    case "matches":
+                        // Já está na página
+                        break;
+                    case "chat":
+                        window.location.href = "/chat.html";
+                        break;
+                    case "profile":
+                        window.location.href = "/profile.html";
+                        break;
+                }
+            }
+
+            // Verificar novos matches periodicamente
+            function checkNewMatches() {
+                // Função desabilitada para evitar mensagens automáticas
+                // A verificação de novos matches será feita apenas quando o usuário acessar a página
+            }
+
+            // Inicializar
+            document.addEventListener("DOMContentLoaded", function () {
+                console.log("🚀 Inicializando página matches");
+
+                // Verificar se usuário está logado
+                const token = getSavedToken();
+                const savedUser = getSavedUser();
+
+                if (!token || !savedUser) {
+                    console.log("🔒 Acesso negado - redirecionando para login");
+                    window.location.href = "/";
+                    return;
+                }
+
+                currentUser = savedUser;
+                updateUserDisplay(savedUser);
+                loadMatches();
+                checkNewMatches();
+            });
+
+            // Funções auxiliares para formatação
+            function getServiceNames(serviceIds) {
+                const serviceNames = {
+                    1: "Limpeza",
+                    2: "Jardinagem",
+                    3: "Encanamento",
+                    4: "Eletricista",
+                    5: "Pintura",
+                    6: "Marcenaria",
+                    7: "Pedreiro",
+                    8: "Vidraceiro",
+                    9: "Culinária",
+                    10: "Doces e Bolos",
+                    11: "Marmitas",
+                    12: "Aulas de Inglês",
+                    13: "Aulas de Matemática",
+                    14: "Aulas de Música",
+                    15: "Reforço Escolar",
+                    16: "Tradução",
+                    17: "Design Gráfico",
+                    18: "Desenvolvimento Web",
+                    19: "Edição de Vídeo",
+                    20: "Consultoria em TI",
+                    21: "Cabeleireiro",
+                    22: "Manicure",
+                    23: "Maquiagem",
+                    24: "Mudanças",
+                    25: "Entrega",
+                    26: "Motorista",
+                    27: "Costura",
+                    28: "Pet Care",
+                    29: "Fotografia",
+                    30: "Personal Trainer",
+                    31: "Consultoria Juridica",
+                    32: "Cuidador",
+                    33: "Depilação",
+                    34: "Sapateiro",
+                    35: "Tattoo e Piercing",
+                    36: "Massoterapia",
+                    37: "Reparo Carro&Moto",
+                };
+
+                if (!serviceIds || serviceIds.length === 0)
+                    return ["Serviços diversos"];
+
+                return serviceIds
+                    .slice(0, 2)
+                    .map((id) => serviceNames[id] || `Serviço ${id}`);
+            }
+
+            function formatMatchTime(timestamp) {
+                const now = new Date();
+                const matchDate = new Date(timestamp);
+                const diffHours = Math.floor(
+                    (now - matchDate) / (1000 * 60 * 60),
+                );
+
+                if (diffHours < 1) return "Agora mesmo";
+                if (diffHours < 24) return `${diffHours} horas atrás`;
+                const diffDays = Math.floor(diffHours / 24);
+                return `${diffDays} dias atrás`;
+            }
+
+            function isNewMatch(timestamp) {
+                const now = new Date();
+                const matchDate = new Date(timestamp);
+                const diffMs = now - matchDate;
+                const diffHours = diffMs / (1000 * 60 * 60);
+
+                // Debug para verificar cálculo
+                console.log(
+                    `🕐 Match criado em: ${matchDate.toLocaleString()}`,
+                );
+                console.log(`⏰ Agora: ${now.toLocaleString()}`);
+                console.log(`⏱️ Diferença: ${diffHours.toFixed(1)} horas`);
+                console.log(`🏷️ É novo? ${diffHours < 24}`);
+
+                return diffHours < 24; // Remove tag "Novo!" após 24 horas (1 dia)
+            }
+
+            // Função openChat que estava faltando
+            function openChat(matchId) {
+                // Marcar match como não-novo
+                const match = matches.find((m) => m.matchId === matchId);
+                if (match) {
+                    match.isNew = false;
+                    displayMatches();
+                }
+
+                // Ir para o chat
+                window.location.href = `/chat.html?match=${matchId}`;
+            }
+
+            // Função goToPage corrigida
+            function goToPage(page) {
+                switch (page) {
+                    case "discovery":
+                        window.location.href = "/discovery-new.html";
+                        break;
+                    case "matches":
+                        // Já está na página
+                        break;
+                    case "chat":
+                        window.location.href = "/chat.html";
+                        break;
+                    case "profile":
+                        window.location.href = "/profile.html";
+                        break;
+                }
+            }
+        </script>
+    </body>
+</html>

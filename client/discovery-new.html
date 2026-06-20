@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AjudeX - Descobrir Serviços</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="auth-utils.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 25%, #fecfef 50%, #9bb5ff 75%, #4facfe 100%);
+            min-height: 100vh;
+            padding-bottom: 80px;
+            overflow-x: hidden;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .logo {
+            background: linear-gradient(135deg, #ff9a9e, #9bb5ff, #4facfe);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .header-info {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .discovery-container {
+            max-width: 400px;
+            margin: 20px auto;
+            height: calc(100vh - 160px);
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .card-stack {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        .user-card {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease, opacity 0.3s ease;
+            cursor: grab;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .user-card:active {
+            cursor: grabbing;
+        }
+
+        .user-card.dragging {
+            z-index: 1000;
+            transform: scale(1.05);
+        }
+
+        .user-card.liked {
+            transform: translateX(100%) rotate(30deg);
+            opacity: 0;
+        }
+
+        .user-card.passed {
+            transform: translateX(-100%) rotate(-30deg);
+            opacity: 0;
+        }
+
+        .card-image {
+            width: 100%;
+            height: 60%;
+            background: linear-gradient(135deg, #ff9a9e, #fecfef, #9bb5ff);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 4rem;
+            color: white;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+
+        .card-image.has-photo {
+            color: transparent;
+        }
+
+        .card-image.no-photo {
+            background: linear-gradient(135deg, #ff9a9e, #fecfef, #9bb5ff);
+        }
+
+        .premium-badge {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: linear-gradient(135deg, #ffd700, #ffed4e);
+            color: #333;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .distance-badge {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .card-content {
+            padding: 20px;
+            height: 40%;
+            overflow-y: auto;
+        }
+
+        .user-name {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .services-section {
+            margin-bottom: 15px;
+        }
+
+        .services-title {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .services-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .service-tag {
+            color: white;
+            padding: 4px 8px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .service-tag.offered {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            box-shadow: 0 2px 5px rgba(76, 175, 80, 0.3);
+        }
+
+        .service-tag.wanted {
+            background: linear-gradient(135deg, #9bb5ff, #4facfe);
+        }
+
+        .services-section.secondary {
+            opacity: 0.7;
+            margin-top: 8px;
+        }
+
+        .services-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        .action-buttons {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 100;
+        }
+
+        .action-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .pass-btn {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+        }
+
+        .like-btn {
+            background: linear-gradient(135deg, #51cf66, #40c057);
+        }
+
+        .action-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .action-btn:active {
+            transform: scale(0.95);
+        }
+
+        .no-more-cards {
+            text-align: center;
+            color: white;
+            font-size: 1.2rem;
+            padding: 40px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 1.1rem;
+            padding: 40px 20px;
+        }
+
+        .match-popup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .match-popup.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .match-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 300px;
+            animation: matchBounce 0.5s ease;
+        }
+
+        @keyframes matchBounce {
+            0% { transform: scale(0.3) rotate(-10deg); }
+            50% { transform: scale(1.1) rotate(5deg); }
+            100% { transform: scale(1) rotate(0deg); }
+        }
+
+        .match-icon {
+            font-size: 4rem;
+            color: #ff9a9e;
+            margin-bottom: 20px;
+        }
+
+        .match-title {
+            font-size: 1.5rem;
+            color: #333;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .match-subtitle {
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .match-btn {
+            background: linear-gradient(135deg, #ff9a9e, #fecfef);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .match-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 154, 158, 0.4);
+        }
+
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 10px 0;
+            display: flex;
+            justify-content: space-around;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            color: #666;
+            text-align: center;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.8rem;
+        }
+
+        .nav-btn.active {
+            color: #ff9a9e;
+            background: rgba(255, 154, 158, 0.1);
+        }
+
+        .nav-btn i {
+            font-size: 1.2rem;
+        }
+
+        /* Touch gestures */
+        .user-card.swipe-hint-right {
+            transform: translateX(20px) rotate(5deg);
+            box-shadow: 0 10px 30px rgba(81, 207, 102, 0.3);
+        }
+
+        .user-card.swipe-hint-left {
+            transform: translateX(-20px) rotate(-5deg);
+            box-shadow: 0 10px 30px rgba(255, 107, 107, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="logo">AjudeX</div>
+        <div class="header-info" id="headerInfo">Descobrindo serviços...</div>
+    </div>
+
+    <div class="discovery-container">
+        <div class="loading" id="loadingMessage">
+            <i class="fas fa-spinner fa-spin"></i><br>
+            Buscando pessoas próximas...
+        </div>
+
+        <div class="card-stack" id="cardStack" style="display: none;">
+            <!-- Cards serão inseridos aqui dinamicamente -->
+        </div>
+
+        <div class="no-more-cards" id="noMoreCards" style="display: none;">
+            <i class="fas fa-heart-broken" style="font-size: 3rem; margin-bottom: 15px; opacity: 0.5;"></i><br>
+            <strong>Não há mais pessoas por agora!</strong><br>
+            <small style="margin-top: 10px; display: block;">Volte mais tarde ou ajuste seus serviços oferecidos/desejados no perfil.</small>
+        </div>
+
+        <div class="action-buttons" id="actionButtons" style="display: none;">
+            <button class="action-btn pass-btn" onclick="passUser()">
+                <i class="fas fa-times"></i>
+            </button>
+            <button class="action-btn like-btn" onclick="likeUser()">
+                <i class="fas fa-heart"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Match Popup -->
+    <div class="match-popup" id="matchPopup">
+        <div class="match-content">
+            <div class="match-icon">🤝</div>
+            <div class="match-title">É um Match!</div>
+            <div class="match-subtitle">Agora vocês podem combinar os serviços!</div>
+            <button class="match-btn" onclick="closeMatchPopup()">Continuar</button>
+        </div>
+    </div>
+
+    <div class="bottom-nav">
+        <button class="nav-btn" onclick="goToPage('discovery')">
+            <i class="fas fa-search"></i>
+            Descobrir
+        </button>
+        <button class="nav-btn" onclick="goToPage('matches')">
+            <i class="fas fa-heart"></i>
+            Matches
+        </button>
+        <button class="nav-btn" onclick="goToPage('chat')">
+            <i class="fas fa-comments"></i>
+            Chat
+        </button>
+        <button class="nav-btn" onclick="goToPage('profile')">
+            <i class="fas fa-user"></i>
+            Perfil
+        </button>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let currentCards = [];
+        let currentCardIndex = 0;
+        let isDragging = false;
+        let startX = 0;
+        let startY = 0;
+        let currentX = 0;
+        let currentY = 0;
+        let services = [];
+
+        // Função para formatar distância de forma consistente
+        function formatDistance(distance) {
+            if (distance === null || distance === undefined || distance === '') {
+                return 'Próximo';
+            }
+            
+            const numDistance = parseFloat(distance);
+            if (isNaN(numDistance)) {
+                return 'Próximo';
+            }
+            
+            if (numDistance === 0) {
+                return 'Mesmo local';
+            }
+            
+            if (numDistance < 1) {
+                return '< 1km';
+            }
+            
+            // Arredondar para 1 casa decimal
+            const rounded = Math.round(numDistance * 10) / 10;
+            return rounded + 'km';
+        }
+
+        // Carregar informações do usuário e inicializar
+        async function init() {
+            console.log('🔄 Inicializando Discovery...');
+            
+            // Verificar autenticação - tentar ambos os tokens
+            const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+            const savedUser = JSON.parse(localStorage.getItem('user') || 'null');
+            
+            console.log('🔍 Debug auth:', {
+                hasToken: !!token,
+                hasUser: !!savedUser,
+                tokenPrefix: token ? token.substring(0, 20) + '...' : 'null',
+                userName: savedUser ? savedUser.name : 'null',
+                userId: savedUser ? savedUser.id : 'null'
+            });
+            
+            if (!token || !savedUser) {
+                console.log('🔒 Usuário não autenticado - redirecionando');
+                alert('Você precisa fazer login primeiro!');
+                window.location.href = '/';
+                return;
+            }
+            
+            currentUser = savedUser;
+            console.log('✅ Usuário autenticado:', currentUser.name, 'ID:', currentUser.id);
+            
+            // Marcar botão ativo
+            document.querySelector('.nav-btn').classList.add('active');
+            
+            // Carregar serviços
+            await loadServices();
+            
+            // Buscar usuários
+            await loadDiscoveryUsers();
+        }
+
+        // Carregar lista de serviços
+        async function loadServices() {
+            try {
+                const response = await fetch('/api/services');
+                if (response.ok) {
+                    services = await response.json();
+                    console.log('✅ Serviços carregados:', services.length);
+                } else {
+                    console.error('❌ Erro ao carregar serviços');
+                }
+            } catch (error) {
+                console.error('❌ Erro na requisição de serviços:', error);
+            }
+        }
+
+        // Buscar usuários para Discovery
+        async function loadDiscoveryUsers() {
+            try {
+                console.log('🔍 Buscando usuários...');
+                const token = getValidToken();
+                if (!token) return;
+                
+                const response = await fetch(`/api/discovery/${currentUser.id}`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentCards = data.users || [];
+                    
+                    console.log(`✅ ${currentCards.length} usuários encontrados`);
+                    
+                    // Debug: mostrar dados dos usuários e distâncias
+                    currentCards.forEach((user, index) => {
+                        console.log(`👤 Usuário ${index + 1}: ${user.name}`);
+                        console.log(`📍 Distância bruta: ${user.distance} (tipo: ${typeof user.distance})`);
+                        console.log(`📍 Distância formatada: ${user.distance ? Math.round(user.distance * 10) / 10 : 'N/A'}km`);
+                    });
+                    
+                    document.getElementById('headerInfo').textContent = 
+                        `${currentCards.length} pessoas encontradas`;
+                    
+                    if (currentCards.length > 0) {
+                        showCards();
+                    } else {
+                        showNoMoreCards();
+                    }
+                } else {
+                    console.error('❌ Erro ao buscar usuários:', response.status, response.statusText);
+                    if (response.status === 401 || response.status === 403) {
+                        console.log('🔒 Token expirado/inválido - limpando cache e redirecionando');
+                        // Limpar completamente o localStorage
+                        localStorage.removeItem('authToken');
+                        localStorage.removeItem('token');
+                        localStorage.removeItem('user');
+                        localStorage.removeItem('userId');
+                        sessionStorage.clear();
+                        window.location.href = '/';
+                        return;
+                    }
+                    if (response.status === 404) {
+                        console.log('⚠️ Usuário não encontrado - dados inconsistentes');
+                        localStorage.clear();
+                        window.location.href = '/';
+                        return;
+                    }
+                    showNoMoreCards();
+                }
+            } catch (error) {
+                console.error('❌ Erro na busca de usuários:', error);
+                showNoMoreCards();
+            }
+            
+            document.getElementById('loadingMessage').style.display = 'none';
+        }
+
+        // Mostrar cards de usuários
+        function showCards() {
+            const cardStack = document.getElementById('cardStack');
+            const actionButtons = document.getElementById('actionButtons');
+            
+            cardStack.style.display = 'block';
+            actionButtons.style.display = 'flex';
+            
+            // Limpar cards existentes
+            cardStack.innerHTML = '';
+            currentCardIndex = 0;
+            
+            // Criar até 3 cards visíveis (pilha)
+            for (let i = 0; i < Math.min(3, currentCards.length); i++) {
+                createUserCard(currentCards[i], i);
+            }
+        }
+
+        // Criar card de usuário
+        function createUserCard(user, index) {
+            const cardStack = document.getElementById('cardStack');
+            const card = document.createElement('div');
+            card.className = 'user-card';
+            card.style.zIndex = 100 - index;
+            card.style.transform = `scale(${1 - index * 0.05}) translateY(${index * 10}px)`;
+            
+            // Buscar nomes dos serviços
+            const offeredServices = user.servicesOffered.map(id => {
+                const service = services.find(s => s.id === id);
+                return service ? service.name : `Serviço ${id}`;
+            });
+            
+            const wantedServices = user.servicesWanted.map(id => {
+                const service = services.find(s => s.id === id);
+                return service ? service.name : `Serviço ${id}`;
+            });
+
+            // Determinar se tem foto de perfil
+            const hasPhoto = user.photo && user.photo.trim() !== '';
+            const photoStyle = hasPhoto ? `background-image: url('${user.photo}')` : '';
+            const photoClass = hasPhoto ? 'has-photo' : 'no-photo';
+            
+            card.innerHTML = `
+                <div class="card-image ${photoClass}" style="${photoStyle}">
+                    ${hasPhoto ? '' : '<i class="fas fa-user-circle"></i>'}
+                    ${user.premium ? '<div class="premium-badge"><i class="fas fa-crown"></i> Premium</div>' : ''}
+                    <div class="distance-badge"><i class="fas fa-map-marker-alt"></i> ${formatDistance(user.distance)}</div>
+                </div>
+                <div class="card-content">
+                    <div class="user-name">${user.name}</div>
+                    
+                    ${offeredServices.length > 0 ? `
+                    <div class="services-section">
+                        <div class="services-title"><i class="fas fa-tools"></i> Oferece:</div>
+                        <div class="services-list">
+                            ${offeredServices.map(service => 
+                                `<span class="service-tag offered">${service}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+                    
+                    ${wantedServices.length > 0 ? `
+                    <div class="services-section secondary">
+                        <div class="services-title"><i class="fas fa-search"></i> Procura:</div>
+                        <div class="services-list">
+                            ${wantedServices.map(service => 
+                                `<span class="service-tag wanted">${service}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            // Adicionar eventos de touch/mouse
+            if (index === 0) {
+                addCardGestures(card);
+            }
+            
+            cardStack.appendChild(card);
+        }
+
+        // Adicionar gestos de arrastar ao card
+        function addCardGestures(card) {
+            // Mouse events
+            card.addEventListener('mousedown', handleStart);
+            document.addEventListener('mousemove', handleMove);
+            document.addEventListener('mouseup', handleEnd);
+            
+            // Touch events
+            card.addEventListener('touchstart', handleStart);
+            document.addEventListener('touchmove', handleMove);
+            document.addEventListener('touchend', handleEnd);
+        }
+
+        function handleStart(e) {
+            e.preventDefault();
+            isDragging = true;
+            
+            const clientX = e.clientX || e.touches[0].clientX;
+            const clientY = e.clientY || e.touches[0].clientY;
+            
+            startX = clientX;
+            startY = clientY;
+            
+            const card = e.target.closest('.user-card');
+            if (card) {
+                card.classList.add('dragging');
+            }
+        }
+
+        function handleMove(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+            
+            const clientX = e.clientX || e.touches[0].clientX;
+            const clientY = e.clientY || e.touches[0].clientY;
+            
+            currentX = clientX - startX;
+            currentY = clientY - startY;
+            
+            const card = document.querySelector('.user-card.dragging');
+            if (card) {
+                const rotation = currentX * 0.1;
+                card.style.transform = `translateX(${currentX}px) translateY(${currentY}px) rotate(${rotation}deg)`;
+                
+                // Visual hints
+                if (Math.abs(currentX) > 50) {
+                    if (currentX > 0) {
+                        card.classList.add('swipe-hint-right');
+                        card.classList.remove('swipe-hint-left');
+                    } else {
+                        card.classList.add('swipe-hint-left');
+                        card.classList.remove('swipe-hint-right');
+                    }
+                } else {
+                    card.classList.remove('swipe-hint-right', 'swipe-hint-left');
+                }
+            }
+        }
+
+        function handleEnd(e) {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            const card = document.querySelector('.user-card.dragging');
+            if (card) {
+                card.classList.remove('dragging', 'swipe-hint-right', 'swipe-hint-left');
+                
+                // Verificar se deve fazer ação
+                if (Math.abs(currentX) > 100) {
+                    if (currentX > 0) {
+                        performLike();
+                    } else {
+                        performPass();
+                    }
+                } else {
+                    // Voltar ao centro
+                    card.style.transform = '';
+                }
+            }
+            
+            currentX = 0;
+            currentY = 0;
+        }
+
+        // Função para validar e obter token válido
+        function getValidToken() {
+            const token = localStorage.getItem('authToken') || localStorage.getItem('token');
+            
+            if (!token || token === 'null' || token === 'undefined' || token.length < 10) {
+                console.log('🔒 Token inválido detectado - limpando cache');
+                localStorage.clear();
+                sessionStorage.clear();
+                window.location.href = '/';
+                return null;
+            }
+            
+            return token;
+        }
+
+        // Curtir usuário
+        function likeUser() {
+            performLike();
+        }
+
+        async function performLike() {
+            const currentUserData = currentCards[currentCardIndex];
+            if (!currentUserData) return;
+            
+            const token = getValidToken();
+            if (!token) return;
+            
+            console.log('👍 Curtindo usuário:', currentUserData.name);
+            
+            try {
+                const response = await fetch('/api/like', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        userId: currentUser.id,
+                        targetUserId: currentUserData.id
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.match) {
+                        showMatchPopup();
+                    }
+                } else {
+                    console.error('❌ Erro ao curtir usuário:', response.status);
+                }
+            } catch (error) {
+                console.error('❌ Erro na requisição de like:', error);
+            }
+            
+            // Animar card
+            const card = document.querySelector('.user-card');
+            if (card) {
+                card.classList.add('liked');
+                setTimeout(() => card.remove(), 300);
+            }
+            
+            nextCard();
+        }
+
+        // Rejeitar usuário
+        function passUser() {
+            performPass();
+        }
+
+        async function performPass() {
+            const currentUserData = currentCards[currentCardIndex];
+            if (!currentUserData) return;
+            
+            console.log('👎 Rejeitando usuário:', currentUserData.name);
+            
+            try {
+                
+                await fetch('/api/pass', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        userId: currentUser.id,
+                        targetUserId: currentUserData.id
+                    })
+                });
+            } catch (error) {
+                console.error('❌ Erro ao rejeitar:', error);
+            }
+            
+            // Animar card
+            const card = document.querySelector('.user-card');
+            if (card) {
+                card.classList.add('passed');
+                setTimeout(() => card.remove(), 300);
+            }
+            
+            nextCard();
+        }
+
+        // Próximo card
+        function nextCard() {
+            currentCardIndex++;
+            
+            setTimeout(() => {
+                // Reorganizar cards restantes
+                const cards = document.querySelectorAll('.user-card');
+                cards.forEach((card, index) => {
+                    card.style.zIndex = 100 - index;
+                    card.style.transform = `scale(${1 - index * 0.05}) translateY(${index * 10}px)`;
+                    
+                    // Adicionar gestos ao novo card principal
+                    if (index === 0) {
+                        addCardGestures(card);
+                    }
+                });
+                
+                // Adicionar novo card se houver mais usuários
+                const nextIndex = currentCardIndex + 2;
+                if (nextIndex < currentCards.length) {
+                    createUserCard(currentCards[nextIndex], 2);
+                }
+                
+                // Verificar se acabaram os cards
+                if (currentCardIndex >= currentCards.length) {
+                    setTimeout(showNoMoreCards, 500);
+                }
+            }, 300);
+        }
+
+        // Mostrar popup de match
+        function showMatchPopup() {
+            document.getElementById('matchPopup').classList.add('show');
+        }
+
+        function closeMatchPopup() {
+            document.getElementById('matchPopup').classList.remove('show');
+        }
+
+        // Mostrar mensagem de "sem mais cards"
+        function showNoMoreCards() {
+            document.getElementById('cardStack').style.display = 'none';
+            document.getElementById('actionButtons').style.display = 'none';
+            document.getElementById('noMoreCards').style.display = 'block';
+            document.getElementById('headerInfo').textContent = 'Todas as pessoas foram visualizadas';
+        }
+
+        // Navegação
+        function goToPage(page) {
+            switch (page) {
+                case 'discovery':
+                    // Recarregar página
+                    window.location.reload();
+                    break;
+                case 'matches':
+                    window.location.href = '/matches.html';
+                    break;
+                case 'chat':
+                    window.location.href = '/chat.html';
+                    break;
+                case 'profile':
+                    window.location.href = '/profile.html';
+                    break;
+            }
+        }
+
+        // Inicializar quando a página carregar
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
